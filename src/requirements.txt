@@ -1,6 +1,5 @@
 discord.py
 python-dotenv
 supabase
-sqlalchemy
 asyncpg
 psycopg2

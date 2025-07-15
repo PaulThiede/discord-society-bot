@@ -1,6 +1,7 @@
 from datetime import datetime, date
 from dateutil.parser import parse
 from dataclasses import asdict
+from typing import Any
 
 from src.db.db import supabase
 from src.db.models import Player, PlayerItem, Item, CompanyItem, BuyOrder, MarketItem, SellOrder, Company, Government, \
@@ -112,6 +113,38 @@ async def get_company_item(user_id, server_id, item_tag):
             )
 
     return None
+
+
+async def get_all_players(server_id):
+    response = (
+        supabase.table("Players")
+        .select("*")
+        .eq("server_id", server_id)
+        .execute()
+    )
+
+    players = []
+    for entry in response.data:
+        player = Player(
+            id=entry["id"],
+            server_id=entry["server_id"],
+            created_at=parse_datetime(entry["created_at"]),
+            money=entry["money"],
+            debt=entry["debt"],
+            hunger=entry["hunger"],
+            thirst=entry["thirst"],
+            job=entry["job"],
+            health=entry["health"],
+            company_entrepreneur_id=entry["company_entrepreneur_id"],
+            taxes_owed=entry["taxes_owed"],
+            work_cooldown_until=parse_datetime(entry["work_cooldown_until"]),
+            job_switch_cooldown_until=parse_datetime(entry["job_switch_cooldown_until"]),
+            company_creation_cooldown_until=parse_datetime(entry["company_creation_cooldown_until"]),
+            gift_cooldown_until=parse_datetime(entry["gift_cooldown_until"])
+        )
+        players.append(player)
+
+    return players
 
 
 async def get_player(user_id, server_id):
@@ -284,9 +317,34 @@ async def get_user_join_request(entrepreneur_id: int, server_id: int, user_id: i
     )
 
 
+async def get_all_companies(server_id):
+    response = (
+        supabase.table("Companies")
+        .select("*")
+        .eq("server_id", server_id)
+        .execute()
+    )
+
+    companies = []
+    for entry in response.data:
+        companies.append(Company(
+            entrepreneur_id=entry.get("entrepreneur_id"),
+            server_id=entry.get("server_id"),
+            created_at=datetime.fromisoformat(entry["created_at"]) if entry.get("created_at") else None,
+            producible_items=entry.get("producible_items", ""),
+            capital=entry.get("capital", 0),
+            worksteps=entry.get("worksteps", 0),
+            wage=entry.get("wage", 0),
+            name=entry.get("name", ""),
+            taxes_owed=entry.get("taxes_owed", 0),
+        ))
+
+    return companies
+
+
 async def get_company(user_id: int, server_id: int):
     response = (
-        supabase.table("Company")
+        supabase.table("Companies")
         .select("*")
         .eq("entrepreneur_id", user_id)
         .eq("server_id", server_id)
@@ -750,7 +808,7 @@ async def get_all_gdp_entries(server_id: int, date: datetime):
 
 
 async def delete_buy_orders(user_id, server_id, item_tag, price=None):
-    query = supabase.table("BuyOrders") \
+    query = supabase.table("Buy_Orders") \
         .delete() \
         .eq("user_id", user_id) \
         .eq("server_id", server_id) \
@@ -764,7 +822,7 @@ async def delete_buy_orders(user_id, server_id, item_tag, price=None):
 
 
 async def delete_sell_orders(user_id, server_id, item_tag, price=None):
-    query = supabase.table("SellOrders") \
+    query = supabase.table("Sell_Orders") \
         .delete() \
         .eq("user_id", user_id) \
         .eq("server_id", server_id) \
@@ -963,6 +1021,29 @@ async def delete_company_item(company_entrepreneur_id: int, item_tag: str, serve
     )
     return response.data
 
+
+
+async def delete_company(entrepreneur_id: int, server_id: int):
+    response = (
+        supabase.table("Companies")
+        .delete()
+        .eq("entrepreneur_id", entrepreneur_id)
+        .eq("server_id", server_id)
+        .execute()
+    )
+    return response.data
+
+
+async def delete_join_requests(company_entrepreneur_id: int, user_id: int, server_id: int):
+    response = (
+        supabase.table("Company_Join_Requests")
+        .delete()
+        .eq("company_entrepreneur_id", company_entrepreneur_id)
+        .eq("user_id", user_id)
+        .eq("server_id", server_id)
+        .execute()
+    )
+    return response.data
 
 
 async def delete_player_item(user_id: int, item_tag: str, server_id: int):

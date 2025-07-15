@@ -1,5 +1,4 @@
 from discord import Interaction, Embed, Color
-from sqlalchemy import select
 
 from src.db.db import get_session
 from src.db.db_calls import get_all_items
