@@ -1116,7 +1116,7 @@ class CompanyGroup(app_commands.Group):
                     governing_role=None,
                     admin_role=None
                 )
-                add_object(gov, "Government")
+                await add_object(gov, "Government")
 
             roles = [role.id for role in interaction.user.roles]
             if gov.governing_role not in roles and gov.admin_role not in roles:
@@ -1486,7 +1486,7 @@ async def join(interaction: discord.Interaction, user: discord.Member):
         server_id=server_id,
         company_entrepreneur_id=entrepreneur_id
     )
-    add_object(join_request, "Company_Join_Requests")
+    await add_object(join_request, "Company_Join_Requests")
 
     await interaction.followup.send(
         embed=discord.Embed(
@@ -1554,7 +1554,7 @@ async def hire(interaction: discord.Interaction, user: discord.Member):
             job=None,
             created_at=datetime.utcnow()
         )
-        add_object(player, "Players")
+        await add_object(player, "Players")
 
     # Spieler zur Firma hinzufügen
     player.job = "Worker"
@@ -1711,7 +1711,7 @@ async def gift(interaction: discord.Interaction, user: discord.Member, value: fl
             job="",
             created_at=datetime.utcnow()
         )
-        add_object(sender, "Players")
+        await add_object(sender, "Players")
 
     if sender.gift_cooldown_until and sender.gift_cooldown_until > now:
         remaining = sender.gift_cooldown_until - now
@@ -1750,7 +1750,7 @@ async def gift(interaction: discord.Interaction, user: discord.Member, value: fl
             job="",
             created_at=datetime.utcnow()
         )
-        add_object(receiver, "Players")
+        await add_object(receiver, "Players")
 
     # Transaktion durchführen
     sender.money -= value
@@ -1822,7 +1822,7 @@ async def loan(interaction: discord.Interaction, value: int):
             job="",
             created_at=datetime.utcnow()
         )
-        add_object(player, "Players")
+        await add_object(player, "Players")
 
     if player.debt >= 100_000:
         await interaction.followup.send(
@@ -1846,7 +1846,7 @@ async def loan(interaction: discord.Interaction, value: int):
             governing_role = None,
             admin_role = None
         )
-        add_object(government, "Government")
+        await add_object(government, "Government")
 
     interest_rate = government.interest_rate or 0.30  # Fallback auf 30 %, falls None
     interest_amount = round(value * (1 + interest_rate), 2)
@@ -1915,7 +1915,7 @@ async def paydebt(interaction: discord.Interaction, value: float):
             job="",
             created_at=datetime.utcnow()
         )
-        add_object(player, "Players")
+        await add_object(player, "Players")
 
     if player.debt <= 0:
         await interaction.followup.send(
@@ -1985,7 +1985,7 @@ async def setmoney(interaction: discord.Interaction, user: discord.Member, value
             governing_role=None,
             admin_role=None
         )
-        add_object(gov, "Government")
+        await add_object(gov, "Government")
 
     # Check ONLY for admin_role
     if gov.admin_role not in executor_roles:
@@ -2014,7 +2014,7 @@ async def setmoney(interaction: discord.Interaction, user: discord.Member, value
             job="",
             created_at=datetime.utcnow()
         )
-        add_object(player, "Players")
+        await add_object(player, "Players")
 
     # Apply money/debt
     if value >= 0:
@@ -2067,7 +2067,7 @@ async def addmoney(interaction: discord.Interaction, user: discord.Member, value
             governing_role=None,
             admin_role=None
         )
-        add_object(gov, "Government")
+        await add_object(gov, "Government")
 
     if gov.admin_role not in executor_roles:
         await interaction.followup.send(
@@ -2095,7 +2095,7 @@ async def addmoney(interaction: discord.Interaction, user: discord.Member, value
             job="",
             created_at=datetime.utcnow()
         )
-        add_object(player, "Players")
+        await add_object(player, "Players")
 
     if value >= 0:
         player.money += value
@@ -2147,7 +2147,7 @@ async def setsupply(interaction: discord.Interaction, item: str, value: int):
             governing_role=None,
             admin_role=None
         )
-        add_object(gov, "Government")
+        await add_object(gov, "Government")
 
     if gov.admin_role not in user_roles:
         await interaction.followup.send(
@@ -2245,7 +2245,7 @@ async def setprice(interaction: discord.Interaction, item: str, min_price: float
             governing_role=None,
             admin_role=None
         )
-        add_object(gov, "Government")
+        await add_object(gov, "Government")
 
     if gov.admin_role not in user_roles:
         await interaction.followup.send(
@@ -2314,7 +2314,7 @@ async def setdebt(interaction: discord.Interaction, user: discord.Member, value:
             governing_role=None,
             admin_role=None
         )
-        add_object(gov, "Government")
+        await add_object(gov, "Government")
 
     if gov.admin_role not in user_roles:
         await interaction.followup.send(
@@ -2341,7 +2341,7 @@ async def setdebt(interaction: discord.Interaction, user: discord.Member, value:
             job="",
             created_at=datetime.utcnow()
         )
-        add_object(player, "Players")
+        await add_object(player, "Players")
 
     new_debt = max(0, value)  # Negative Werte zu 0 machen
     player.debt = new_debt
@@ -2391,7 +2391,7 @@ async def adddebt(interaction: discord.Interaction, user: discord.Member, value:
             governing_role=None,
             admin_role=None
         )
-        add_object(gov, "Government")
+        await add_object(gov, "Government")
 
     # Rechte prüfen
     if gov.admin_role not in user_roles:
@@ -2419,7 +2419,7 @@ async def adddebt(interaction: discord.Interaction, user: discord.Member, value:
             job="",
             created_at=datetime.utcnow()
         )
-        add_object(player, "Players")
+        await add_object(player, "Players")
 
     # Debt anpassen, darf nicht < 0 sein
     player.debt = max(0, player.debt + value)
@@ -2468,7 +2468,7 @@ async def additem(interaction: discord.Interaction, user: discord.Member, item: 
             governing_role=None,
             admin_role=None
         )
-        add_object(gov, "Government")
+        await add_object(gov, "Government")
 
     # Rechte prüfen (Adminrolle)
     if gov.admin_role not in user_roles:
@@ -2496,7 +2496,7 @@ async def additem(interaction: discord.Interaction, user: discord.Member, item: 
             job="",
             created_at=datetime.utcnow()
         )
-        add_object(player, "Players")
+        await add_object(player, "Players")
 
     # Prüfen, ob Item existiert
     item_obj = await get_item(item)
@@ -2555,7 +2555,7 @@ async def removeitem(interaction: discord.Interaction, user: discord.Member, ite
             governing_role=None,
             admin_role=None
         )
-        add_object(gov, "Government")
+        await add_object(gov, "Government")
 
     # Rechte prüfen (Adminrolle)
     if gov.admin_role not in user_roles:
@@ -2583,7 +2583,7 @@ async def removeitem(interaction: discord.Interaction, user: discord.Member, ite
             job="",
             created_at=datetime.utcnow()
         )
-        add_object(player, "Players")
+        await add_object(player, "Players")
 
     # PlayerItem abrufen
     player_item = await get_player_item(target_user_id, server_id,  item)
@@ -2647,7 +2647,7 @@ async def bailout(interaction: discord.Interaction, user: discord.Member):
             governing_role=None,
             admin_role=None
         )
-        add_object(gov, "Government")
+        await add_object(gov, "Government")
 
     # Rollenprüfung
     if not gov.governing_role or gov.governing_role not in user_roles:
@@ -2675,7 +2675,7 @@ async def bailout(interaction: discord.Interaction, user: discord.Member):
             job="",
             created_at=datetime.utcnow()
         )
-        add_object(player, "Players")
+        await add_object(player, "Players")
 
     if player.debt <= 0:
         await interaction.followup.send(
@@ -2998,7 +2998,7 @@ async def buymaterials(interaction: discord.Interaction, item: str, amount: int 
                     is_company=True,
                     expires_at=datetime.utcnow() + BUY_ORDER_DURATION
                 )
-                add_object(new_order, "Buy_Orders")
+                await add_object(new_order, "Buy_Orders")
                 buy_orders_created.append((tag, qty, unit_price))
 
     # Wenn direkt gekauft wird → Kapital abziehen & Items hinzufügen
@@ -3029,7 +3029,7 @@ async def buymaterials(interaction: discord.Interaction, item: str, amount: int 
                     item_tag=tag,
                     amount=qty
                 )
-                add_object(new_item, "Company_Items")
+                await add_object(new_item, "Company_Items")
 
         # Stock reduzieren und Preise leicht anpassen
         for tag, qty, unit_price, _ in purchases:
@@ -3124,7 +3124,7 @@ class TaxCommandGroup(app_commands.Group):
                 job=None,
                 created_at=datetime.utcnow()
             )
-            add_object(player, "Players")
+            await add_object(player, "Players")
 
         company = await get_company(user_id, server_id)
         total_personal = player.taxes_owed
@@ -3168,7 +3168,7 @@ class TaxCommandGroup(app_commands.Group):
                 governing_role=None,
                 admin_role=None
             )
-            add_object(government, "Government")
+            await add_object(government, "Government")
 
         gov.treasury += paid
 
@@ -3207,7 +3207,7 @@ class TaxCommandGroup(app_commands.Group):
                 governing_role=None,
                 admin_role=None
             )
-            add_object(gov, "Government")
+            await add_object(gov, "Government")
 
         if gov.governing_role not in user_roles:
             await interaction.followup.send(
@@ -3253,7 +3253,7 @@ async def government(interaction: discord.Interaction):
             governing_role=None,
             admin_role=None
         )
-        add_object(gov, "Government")
+        await add_object(gov, "Government")
 
     # Rollen auflösen
     guild = interaction.guild
