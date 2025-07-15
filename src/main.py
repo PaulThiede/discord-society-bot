@@ -6,9 +6,9 @@ from discord.ui import Button, View, button
 from discord.app_commands import Choice
 
 from math import floor, ceil
-
-
 from datetime import timedelta, date
+from time import time
+
 
 from src.commands import ping, get_items, stats, job, chop, mine, farm, harvest, drink, eat, consume, buy, sell
 from src.db.models import Player, PlayerItem, Item, MarketItem, BuyOrder, SellOrder, Company, Government, CompanyItem, CompanyJoinRequest, GovernmentGDP
@@ -88,11 +88,15 @@ async def init_job(interaction: Interaction, job_type: app_commands.Choice[str])
 
 @client.tree.command(name="chop", description="Used by lumberjacks to chop down trees.", guild=guild_id)
 async def init_chop(interaction: Interaction):
+    await interaction.response.defer(thinking=True)
     await chop(interaction)
 
 
 @client.tree.command(name="mine", description="Used by miners to mine resources.", guild=guild_id)
 async def init_mine(interaction: discord.Interaction):
+    print("Interaction received at", time())
+    await interaction.response.defer(thinking=True)
+    print("Deferred at", time())
     await mine(interaction)
 
 
@@ -105,21 +109,25 @@ async def init_mine(interaction: discord.Interaction):
     app_commands.Choice(name="leather", value="Leather"),
 ])
 async def init_farm(interaction: Interaction, item: app_commands.Choice[str] = None):
+    await interaction.response.defer(thinking=True)
     await farm(interaction, item)
 
 
 @client.tree.command(name="harvest", description="Used by special jobs to harvest their unique resource.", guild=guild_id)
 async def init_harvest(interaction: Interaction):
+    await interaction.response.defer(thinking=True)
     await harvest(interaction)
 
 
 @client.tree.command(name="drink", description="Consumes 1 water from your inventory and fills up your thirst bar.", guild=guild_id)
 async def init_drink(interaction: Interaction):
+    await interaction.response.defer(thinking=True)
     await drink(interaction)
 
 
 @client.tree.command(name="eat", description="Consumes 1 grocery from your inventory and fills up your hunger bar.", guild=guild_id)
 async def init_eat(interaction: discord.Interaction):
+    await interaction.response.defer(thinking=True)
     await eat(interaction)
 
 
@@ -135,6 +143,7 @@ async def init_eat(interaction: discord.Interaction):
     app_commands.Choice(name="fish", value="Fish")
 ])
 async def init_consume(interaction: discord.Interaction, item: app_commands.Choice[str]):
+   await interaction.response.defer(thinking=True)
    await consume(interaction, item)
 
 
@@ -762,8 +771,13 @@ class CompanyGroup(app_commands.Group):
         description="View important info about your company."
     )
     async def info(self, interaction: discord.Interaction):
+        try:
+            await interaction.response.defer(thinking=True)
+        except:
+            print("Command failure due to high latency.")
+            return
         print(f"{interaction.user}: /company info")
-        await interaction.response.defer(thinking=True)
+        
 
         target_user = interaction.user
         user_id = int(target_user.id)

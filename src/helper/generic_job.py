@@ -10,7 +10,6 @@ from src.helper.item import use_item, add_player_item
 from src.helper.embed_creators import create_job_embed
 
 async def execute_job(interaction: Interaction, job_name: str, job_items: List[str], err_message: str, resource_choices: List[str], job_verb: str):
-    await interaction.response.defer(thinking=True)
 
     user_id = int(interaction.user.id)
     server_id = int(interaction.guild.id)

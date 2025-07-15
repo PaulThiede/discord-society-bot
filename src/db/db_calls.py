@@ -1119,5 +1119,7 @@ async def add_object(obj: Any, table_name: str):
         .execute()
     )
 
+    print(f"Added {obj} to {table_name}")
+
     return response.data
 
