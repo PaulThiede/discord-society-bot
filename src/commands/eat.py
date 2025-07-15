@@ -1,5 +1,4 @@
 from discord import Interaction, Embed, Color
-from sqlalchemy import select
 
 from src.db.db_calls import get_player, add_object, update_player
 from src.helper.defaults import get_default_player
