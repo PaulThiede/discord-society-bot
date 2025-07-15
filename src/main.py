@@ -771,10 +771,11 @@ class CompanyGroup(app_commands.Group):
         description="View important info about your company."
     )
     async def info(self, interaction: discord.Interaction):
+        start_time = time()
         try:
             await interaction.response.defer(thinking=True)
         except:
-            print("Command failure due to high latency.")
+            print(f"Command failure due to high latency ({time() - start_time})")
             return
         print(f"{interaction.user}: /company info")
         
@@ -2799,8 +2800,13 @@ class LeaderboardView(View):
 # Slash Command
 @client.tree.command(name="leaderboard", description="Shows who owns the most networth.", guild = guild_id)
 async def leaderboard(interaction: Interaction):
+    start_time = time()
+    try:
+        await interaction.response.defer(thinking=True)
+    except:
+        print(f"Command failure due to high latency ({time() - start_time})")
+        return
     print(f"{interaction.user}: /leaderboard")
-    await interaction.response.defer(thinking=True)
 
     user_id = int(interaction.user.id)
     server_id = int(interaction.guild.id)
@@ -3087,8 +3093,9 @@ class TaxCommandGroup(app_commands.Group):
         super().__init__(name="tax", description="Different commands for managing taxes.")
     @app_commands.command(name="view", description="View all outstanding taxes")
     async def view(self, interaction: discord.Interaction):
-        print(f"{interaction.user}: /tax view")
         await interaction.response.defer(thinking=True)
+        print(f"{interaction.user}: /tax view")
+        
         server_id = interaction.guild.id
 
         players = await get_tax_owing_players(server_id)
