@@ -27,7 +27,7 @@ from src.db.db_calls import (get_item, get_company, get_buy_orders, get_market_i
                              get_player_item, update_player, update_buy_order, update_company, update_company_item,
                              update_company_join_request, \
                              update_government, update_government_gdp, update_market_item, update_player_item,
-                             update_sell_order, delete_company_item)
+                             update_sell_order, delete_company_item, delete_buy_orders, add_object, delete_sell_orders)
 from src.helper.defaults import get_default_market_item
 from src.helper.item import add_company_item, add_player_item, has_player_item, use_item
 from src.helper.randoms import get_hunger_depletion, get_thirst_depletion
@@ -238,279 +238,272 @@ class CompanyGroup(app_commands.Group):
         user_id = int(interaction.user.id)
         server_id = int(interaction.guild.id)
 
-
-
-        async for session in get_session():
-
-            # Item prüfen
-            item_obj = await get_item(item)
-            if not item_obj:
-                await interaction.followup.send(
-                    embed=discord.Embed(
-                        title="Error!",
-                        description=f"Item **{item}** does not exist.",
-                        color=discord.Color.red()
-                    ), ephemeral=True
-                )
-                return
-            item_tag = item_obj.item_tag
-
-            # Company prüfen
-            company = await get_company(user_id, server_id)
-            if not company:
-                await interaction.followup.send(
-                    embed=discord.Embed(
-                        title="You Don't Own A Company!",
-                        description=f"To use /company commands, you need to own a company first. Try using /company create.",
-                        color=discord.Color.red()
-                    ), ephemeral=True
-                )
-                return
-
-            # Inventar prüfen
-            inv_item = await get_company_inventory(user_id, server_id)
-            if not inv_item or inv_item.amount < amount:
-                await interaction.followup.send(
-                    embed=discord.Embed(
-                        title="Error!",
-                        description=f"Your company doesn't have enough **{item_tag}**.",
-                        color=discord.Color.red()
-                    ), ephemeral=True
-                )
-                return
-
-            player = await get_player(user_id, server_id)
-            if not player or player.job != "Entrepreneur":
-                embed = discord.Embed(
+        # Item prüfen
+        item_obj = await get_item(item)
+        if not item_obj:
+            await interaction.followup.send(
+                embed=discord.Embed(
                     title="Error!",
-                    description="You are not an entrepreneur!",
+                    description=f"Item **{item}** does not exist.",
                     color=discord.Color.red()
-                )
-                await interaction.followup.send(embed=embed, ephemeral=True)
-                return
+                ), ephemeral=True
+            )
+            return
+        item_tag = item_obj.item_tag
 
-            if player.hunger <= 0 or player.thirst <= 0:
-                embed = discord.Embed(
+        # Company prüfen
+        company = await get_company(user_id, server_id)
+        if not company:
+            await interaction.followup.send(
+                embed=discord.Embed(
+                    title="You Don't Own A Company!",
+                    description=f"To use /company commands, you need to own a company first. Try using /company create.",
+                    color=discord.Color.red()
+                ), ephemeral=True
+            )
+            return
+
+        # Inventar prüfen
+        inv_item = await get_company_inventory(user_id, server_id)
+        if not inv_item or inv_item.amount < amount:
+            await interaction.followup.send(
+                embed=discord.Embed(
                     title="Error!",
-                    description="You are too hungry or thirsty to work!",
+                    description=f"Your company doesn't have enough **{item_tag}**.",
                     color=discord.Color.red()
-                )
-                await interaction.followup.send(embed=embed, ephemeral=True)
-                return
+                ), ephemeral=True
+            )
+            return
 
-            if player.hunger <= amount * 5 or player.thirst <= amount * 7.5:
-                embed = discord.Embed(
-                    title="Error!",
-                    description=f"To sell {amount} items, you need at least {5 * amount} hunger and {7.5 * amount} thirst.",
-                    color=discord.Color.red()
-                )
-                await interaction.followup.send(embed=embed, ephemeral=True)
-                return
+        player = await get_player(user_id, server_id)
+        if not player or player.job != "Entrepreneur":
+            embed = discord.Embed(
+                title="Error!",
+                description="You are not an entrepreneur!",
+                color=discord.Color.red()
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
 
-            now = datetime.now()
+        if player.hunger <= 0 or player.thirst <= 0:
+            embed = discord.Embed(
+                title="Error!",
+                description="You are too hungry or thirsty to work!",
+                color=discord.Color.red()
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
 
-            if player.work_cooldown_until and player.work_cooldown_until > now:
-                ts = int(player.work_cooldown_until.timestamp())
-                embed = discord.Embed(
-                    title="Cooldown Active",
-                    description=f"You can work again <t:{ts}:R>.",
-                    color=discord.Color.red()
-                )
-                await interaction.followup.send(embed=embed, ephemeral=True)
-                return
+        if player.hunger <= amount * 5 or player.thirst <= amount * 7.5:
+            embed = discord.Embed(
+                title="Error!",
+                description=f"To sell {amount} items, you need at least {5 * amount} hunger and {7.5 * amount} thirst.",
+                color=discord.Color.red()
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
 
-            # Abziehen
-            inv_item.amount -= amount
-            update_company_item(inv_item)
-            if inv_item.amount <= 0:
-                await delete_company_item(inv_item)
+        now = datetime.now()
 
-            # Update hunger/thirst/cooldown
-            old_hunger = player.hunger
-            old_thirst = player.thirst
-            player.hunger = max(0, player.hunger - amount * get_hunger_depletion())
-            player.thirst = max(0, player.thirst - amount * get_thirst_depletion())
-            player.work_cooldown_until = now + WORK_COOLDOWN
-            await update_player(player)
+        if player.work_cooldown_until and player.work_cooldown_until > now:
+            ts = int(player.work_cooldown_until.timestamp())
+            embed = discord.Embed(
+                title="Cooldown Active",
+                description=f"You can work again <t:{ts}:R>.",
+                color=discord.Color.red()
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
 
-            # Bestehende SellOrder checken
-            now = datetime.now()
-            expires_at = now + BUY_ORDER_DURATION
+        # Abziehen
+        inv_item.amount -= amount
+        await update_company_item(inv_item)
+        if inv_item.amount <= 0:
+            await delete_company_item(inv_item)
 
-            existing_order = await get_own_sell_orders(user_id, server_id, item_tag, unit_price, now, is_company=True)
+        # Update hunger/thirst/cooldown
+        old_hunger = player.hunger
+        old_thirst = player.thirst
+        player.hunger = max(0, player.hunger - amount * get_hunger_depletion())
+        player.thirst = max(0, player.thirst - amount * get_thirst_depletion())
+        player.work_cooldown_until = now + WORK_COOLDOWN
+        await update_player(player)
 
-            if existing_order:
-                print("Merging orders")
-                existing_order.amount += amount
-                existing_order.expires_at = expires_at
-                await update_sell_order(existing_order)
-                embed = discord.Embed(
-                    title="Company Sell Order Merged",
-                    description=(
-                        f"Merged your company sell orders for **{item_tag}** at **${unit_price}**.\n"
-                        f"New total: **{existing_order.amount}x {item_tag}** = **${existing_order.amount * unit_price}**."
-                    ),
-                    color=discord.Color.green()
-                )
-                embed.add_field(name="Hunger", value=f"{old_hunger} -> {player.hunger}")
-                embed.add_field(name="Thirst", value=f"{old_thirst} -> {player.thirst}")
-                await interaction.followup.send(embed=embed)
-                return
+        # Bestehende SellOrder checken
+        now = datetime.now()
+        expires_at = now + BUY_ORDER_DURATION
 
+        existing_order = await get_own_sell_orders(user_id, server_id, item_tag, unit_price, now, is_company=True)
 
-
-            # Buy Orders abrufen
-            buy_orders = await get_buy_orders(server_id, item_tag, unit_price, now)
-
-            total_sold = 0
-            total_earned = 0.0
-
-            for buy_order in buy_orders:
-                if total_sold >= amount:
-                    break
-
-
-                sell_qty = min(buy_order.amount, amount - total_sold)
-                total_price = round(sell_qty * unit_price, 2)
-
-                # Validierung + Transaktion
-                if buy_order.is_company:
-                    company_buyer = await get_company(buy_order.user_id, server_id)
-
-                    if not company_buyer:
-                        # Firma existiert nicht mehr → Order löschen, Verkauf überspringen
-                        await delete_buy_order(buy_order)
-                        continue
-
-                    if company_buyer.capital < total_price:
-                        continue  # Firma hat nicht genug Geld → überspringen
-
-                    # Transaktion Firma → Verkäufer
-                    company_buyer.capital -= total_price
-                    company.capital += total_price
-                    await add_owed_taxes(session, user_id=company.entrepreneur_id, server_id=server_id,
-                                         amount=total_price, is_company=True)
-                    await add_company_item(session, buy_order.user_id, server_id, item_tag, sell_qty, True)
-
-                else:
-                    buyer = await get_player(buy_order.user_id, server_id)
-                    if not buyer or buyer.money < total_price:
-                        continue
+        if existing_order:
+            print("Merging orders")
+            existing_order.amount += amount
+            existing_order.expires_at = expires_at
+            await update_sell_order(existing_order)
+            embed = discord.Embed(
+                title="Company Sell Order Merged",
+                description=(
+                    f"Merged your company sell orders for **{item_tag}** at **${unit_price}**.\n"
+                    f"New total: **{existing_order.amount}x {item_tag}** = **${existing_order.amount * unit_price}**."
+                ),
+                color=discord.Color.green()
+            )
+            embed.add_field(name="Hunger", value=f"{old_hunger} -> {player.hunger}")
+            embed.add_field(name="Thirst", value=f"{old_thirst} -> {player.thirst}")
+            await interaction.followup.send(embed=embed)
+            return
 
 
 
-                    if buyer.money < total_price:
-                        sell_qty = int(buyer.money // unit_price)
-                        total_price = round(sell_qty * unit_price, 2)
+        # Buy Orders abrufen
+        buy_orders = await get_buy_orders(server_id, item_tag, unit_price, now)
 
-                    if sell_qty <= 0:
-                        continue
+        total_sold = 0
+        total_earned = 0.0
 
-                    # Transaktion Käufer → Verkäufer
-                    buyer.money -= total_price
-                    company.capital += total_price
-                    await add_owed_taxes(session, user_id=company.entrepreneur_id, server_id=server_id,
-                                         amount=total_price, is_company=True)
-                    await add_player_item(session, buy_order.user_id, server_id, item_tag, sell_qty)
+        for buy_order in buy_orders:
+            if total_sold >= amount:
+                break
 
-                # Buy Order anpassen oder löschen
-                buy_order.amount -= sell_qty
-                if buy_order.amount <= 0:
-                    await session.delete(buy_order)
 
-                total_sold += sell_qty
+            sell_qty = min(buy_order.amount, amount - total_sold)
+            total_price = round(sell_qty * unit_price, 2)
+
+            # Validierung + Transaktion
+            if buy_order.is_company:
+                company_buyer = await get_company(buy_order.user_id, server_id)
+
+                if not company_buyer:
+                    # Firma existiert nicht mehr → Order löschen, Verkauf überspringen
+                    await delete_buy_orders(buy_order)
+                    continue
+
+                if company_buyer.capital < total_price:
+                    continue  # Firma hat nicht genug Geld → überspringen
+
+                # Transaktion Firma → Verkäufer
+                company_buyer.capital -= total_price
+                company.capital += total_price
+                await add_owed_taxes(user_id=company.entrepreneur_id, server_id=server_id,
+                                     amount=total_price, is_company=True)
+                await add_company_item(buy_order.user_id, server_id, item_tag, sell_qty, True)
+
+            else:
+                buyer = await get_player(buy_order.user_id, server_id)
+                if not buyer or buyer.money < total_price:
+                    continue
+
+
+
+                if buyer.money < total_price:
+                    sell_qty = int(buyer.money // unit_price)
+                    total_price = round(sell_qty * unit_price, 2)
+
+                if sell_qty <= 0:
+                    continue
+
+                # Transaktion Käufer → Verkäufer
+                buyer.money -= total_price
+                company.capital += total_price
+                await add_owed_taxes(user_id=company.entrepreneur_id, server_id=server_id,
+                                     amount=total_price, is_company=True)
+                await add_player_item(buy_order.user_id, server_id, item_tag, sell_qty)
+
+            # Buy Order anpassen oder löschen
+            buy_order.amount -= sell_qty
+            if buy_order.amount <= 0:
+                await delete_buy_orders(buy_order.user_id, buy_order.server_id, buy_order.item_tag)
+
+            total_sold += sell_qty
+            total_earned += total_price
+
+            embed = discord.Embed(
+                title="Buy Order Fulfilled",
+                description=f"Your buy order of **{sell_qty}x {item_tag}** at **${unit_price:.2f}** each was successful (Total: **${total_price:.2f}**).",
+                color=discord.Color.green()
+            )
+            try:
+                buyer_user = await interaction.client.fetch_user(buy_order.user_id)
+                await buyer_user.send(embed=embed)
+            except discord.Forbidden:
+                pass
+
+        # NPC-Markt
+        if total_sold < amount:
+            remaining = amount - total_sold
+            # Markt initialisieren, falls nötig
+            market_entry = await get_market_item(server_id, item_tag)
+            if not market_entry:
+                items = await get_all_items()
+
+                for item in items:
+                    market_item = get_default_market_item(item, server_id)
+                    await add_object(market_item, "Market_Items")
+
+            market_entry = await get_market_item(server_id, item_tag)
+
+            if unit_price <= market_entry.min_price and market_entry.stockpile >= remaining:
+                npc_sell_qty = remaining
+                price = market_entry.min_price
+                total_price = round(npc_sell_qty * price, 2)
+
+                company.capital += total_price
+                await update_company(company)
+                market_entry.stockpile += npc_sell_qty
+                await add_owed_taxes(user_id=company.entrepreneur_id, server_id=server_id,
+                                     amount=total_price, is_company=True)
+
+                total_sold += npc_sell_qty
                 total_earned += total_price
-
                 embed = discord.Embed(
-                    title="Buy Order Fulfilled",
-                    description=f"Your buy order of **{sell_qty}x {item_tag}** at **${unit_price:.2f}** each was successful (Total: **${total_price:.2f}**).",
-                    color=discord.Color.green()
-                )
-                try:
-                    buyer_user = await interaction.client.fetch_user(buy_order.user_id)
-                    await buyer_user.send(embed=embed)
-                except discord.Forbidden:
-                    pass
-
-            # NPC-Markt
-            if total_sold < amount:
-                remaining = amount - total_sold
-                # Markt initialisieren, falls nötig
-                market_entry = await get_market_item(server_id, item_tag)
-                if not market_entry:
-                    items = await get_all_items(session)
-
-                    for item in items:
-                        market_item = get_default_market_item(item, server_id)
-                        session.add(market_item)
-
-                    await session.commit()
-
-                market_entry = await get_market_item(server_id, item_tag)
-
-                if unit_price <= market_entry.min_price and market_entry.stockpile >= remaining:
-                    npc_sell_qty = remaining
-                    price = market_entry.min_price
-                    total_price = round(npc_sell_qty * price, 2)
-
-                    company.capital += total_price
-                    market_entry.stockpile += npc_sell_qty
-                    await add_owed_taxes(session, user_id=company.entrepreneur_id, server_id=server_id,
-                                         amount=total_price, is_company=True)
-
-                    total_sold += npc_sell_qty
-                    total_earned += total_price
-                    embed = discord.Embed(
-                        title="NPC Market Sale",
-                        description=(
-                            f"You sold **{npc_sell_qty}x {item_tag}** to the NPC market for **${price:.2f}** each (Total: **${total_price:.2f}**)."),
-                        color=discord.Color.green()
-                    )
-                    embed.add_field(name="Hunger", value=f"{old_hunger} -> {player.hunger}")
-                    embed.add_field(name="Thirst", value=f"{old_thirst} -> {player.thirst}")
-                    await interaction.followup.send(embed=embed)
-
-                    # Preis leicht senken
-                    factor = 1 - (0.005 * npc_sell_qty)
-                    market_entry.max_price = round(market_entry.max_price * factor, 2)
-                    market_entry.min_price = round(market_entry.min_price * factor, 2)
-
-                    await session.commit()
-                    return
-
-            if total_sold < amount:
-                print("Creating new Sell Order")
-                rest = amount - total_sold
-                new_order = SellOrder(
-                    user_id=user_id,
-                    item_tag=item_tag,
-                    server_id=server_id,
-                    amount=rest,
-                    unit_price=unit_price,
-                    expires_at=expires_at,
-                    is_company=True
-                )
-                session.add(new_order)
-                embed = discord.Embed(
-                        title="Company Sell Order Placed",
-                        description=f"Your sell order for **{rest}x {item_tag}** at **${unit_price:.2f}** has been created.",
-                        color=discord.Color.green()
-                    )
-                embed.add_field(name="Hunger", value=f"{old_hunger} -> {player.hunger}")
-                embed.add_field(name="Thirst", value=f"{old_thirst} -> {player.thirst}")
-                await interaction.followup.send(embed=embed)
-
-            if total_sold > 0:
-                embed = discord.Embed(
-                    title="Company Player Market Sale",
-                    description=f"You sold **{total_sold}x {item_tag}** for **${total_earned:.2f}** total.",
+                    title="NPC Market Sale",
+                    description=(
+                        f"You sold **{npc_sell_qty}x {item_tag}** to the NPC market for **${price:.2f}** each (Total: **${total_price:.2f}**)."),
                     color=discord.Color.green()
                 )
                 embed.add_field(name="Hunger", value=f"{old_hunger} -> {player.hunger}")
                 embed.add_field(name="Thirst", value=f"{old_thirst} -> {player.thirst}")
                 await interaction.followup.send(embed=embed)
 
-            await session.commit()
+                # Preis leicht senken
+                factor = 1 - (0.005 * npc_sell_qty)
+                market_entry.max_price = round(market_entry.max_price * factor, 2)
+                market_entry.min_price = round(market_entry.min_price * factor, 2)
+
+                await update_market_item(market_entry)
+                return
+
+        if total_sold < amount:
+            print("Creating new Sell Order")
+            rest = amount - total_sold
+            new_order = SellOrder(
+                user_id=user_id,
+                item_tag=item_tag,
+                server_id=server_id,
+                amount=rest,
+                unit_price=unit_price,
+                expires_at=expires_at,
+                is_company=True
+            )
+            await add_object(new_order)
+            embed = discord.Embed(
+                    title="Company Sell Order Placed",
+                    description=f"Your sell order for **{rest}x {item_tag}** at **${unit_price:.2f}** has been created.",
+                    color=discord.Color.green()
+                )
+            embed.add_field(name="Hunger", value=f"{old_hunger} -> {player.hunger}")
+            embed.add_field(name="Thirst", value=f"{old_thirst} -> {player.thirst}")
+            await interaction.followup.send(embed=embed)
+
+        if total_sold > 0:
+            embed = discord.Embed(
+                title="Company Player Market Sale",
+                description=f"You sold **{total_sold}x {item_tag}** for **${total_earned:.2f}** total.",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="Hunger", value=f"{old_hunger} -> {player.hunger}")
+            embed.add_field(name="Thirst", value=f"{old_thirst} -> {player.thirst}")
+            await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="buy", description="Buy items from the market")
     @app_commands.describe(
@@ -540,237 +533,233 @@ class CompanyGroup(app_commands.Group):
 
         user_id = int(interaction.user.id)
         server_id = int(interaction.guild.id)
-        async for session in get_session():
-            try:
-                # Item prüfen
-                item_obj = await get_item(item)
-                if not item_obj:
+
+        # Item prüfen
+        item_obj = await get_item(item)
+        if not item_obj:
+            await interaction.followup.send(
+                embed=discord.Embed(
+                    title="Error!",
+                    description=f"Item **{item}** does not exist.",
+                    color=discord.Color.red()
+                ), ephemeral=True
+            )
+            return
+        item_tag = item_obj.item_tag
+
+        # Company laden
+        company = await get_company(user_id, server_id)
+        if not company:
+            await interaction.followup.send(
+                embed=discord.Embed(
+                    title="You Don't Own A Company!",
+                    description=f"To use /company commands, you need to own a company first. Try using /company create.",
+                    color=discord.Color.red()
+                ), ephemeral=True
+            )
+            return
+
+        if company.capital < unit_price * amount:
+            await interaction.followup.send(
+                embed=discord.Embed(
+                    title="Not Enough Money!",
+                    description=f"You are trying to buy **{amount}x {item_tag}** for **${(unit_price * amount):.2f}**, but your company only has **${company.capital:.2f}**.",
+                    color=discord.Color.red()
+                ), ephemeral=True
+            )
+            return
+
+        # Bestehende BuyOrder checken
+        now = datetime.now()
+        expires_at = now + BUY_ORDER_DURATION
+
+        existing_order = await get_own_buy_orders(user_id, server_id, item_tag, unit_price, expires_at, is_company=True)
+
+        if existing_order:
+            existing_order.amount += amount
+            existing_order.expires_at = expires_at
+            await update_buy_order(existing_order)
+
+            await interaction.followup.send(
+                embed=discord.Embed(
+                    title="Company Buy Order Merged",
+                    description=(
+                        f"Merged your company buy orders for **{item_tag}** at **${unit_price}**.\n"
+                        f"New total: **{existing_order.amount}x {item_tag}** = **${existing_order.amount * unit_price}**."
+                    ),
+                    color=discord.Color.green()
+                )
+            )
+            return
+
+        # Markt initialisieren, falls nötig
+        market_entry = await get_market_item(server_id, item_tag)
+        if not market_entry:
+            items = await get_all_items()
+
+            for item in items:
+                market_item = get_default_market_item(item, server_id)
+                await add_object(market_item, "Market_Items")
+
+        market_entry = await get_market_item(server_id, item_tag)
+
+        # SELL-Orders finden
+        fulfilled_total = 0
+        total_spent = 0.0
+
+        sell_orders = await get_sell_orders(server_id, item_tag, unit_price, now)
+
+        for sell_order in sell_orders:
+            if company.capital < sell_order.unit_price:
+                break
+
+            match_amount = min(amount, sell_order.amount)
+            total_price = round(match_amount * sell_order.unit_price, 2)
+
+            if company.capital < total_price:
+                match_amount = int(company.capital // sell_order.unit_price)
+                total_price = round(match_amount * sell_order.unit_price, 2)
+
+            if match_amount <= 0:
+                break
+
+            # Geld abziehen
+            company.capital -= total_price
+            await add_company_item(user_id, server_id, item_tag, match_amount)
+
+            if sell_order.is_company:
+                company_seller = await get_company(sell_order.user_id, server_id)
+                if company_seller:
+                    company_seller.capital += total_price
+                    await add_owed_taxes(user_id=company_seller.entrepreneur_id, server_id=server_id, amount=total_price, is_company=True)
+
+                else:
+                    await delete_sell_orders(sell_order)
                     await interaction.followup.send(
                         embed=discord.Embed(
-                            title="Error!",
-                            description=f"Item **{item}** does not exist.",
-                            color=discord.Color.red()
-                        ), ephemeral=True
+                            title="Sell Order Removed",
+                            description="The company for one of the sell orders no longer exists. Sell order removed.",
+                            color=discord.Color.orange()
+                        )
                     )
-                    return
-                item_tag = item_obj.item_tag
-
-                # Company laden
-                company = await get_company(user_id, server_id)
-                if not company:
-                    await interaction.followup.send(
-                        embed=discord.Embed(
-                            title="You Don't Own A Company!",
-                            description=f"To use /company commands, you need to own a company first. Try using /company create.",
-                            color=discord.Color.red()
-                        ), ephemeral=True
-                    )
-                    return
-
-                if company.capital < unit_price * amount:
-                    await interaction.followup.send(
-                        embed=discord.Embed(
-                            title="Not Enough Money!",
-                            description=f"You are trying to buy **{amount}x {item_tag}** for **${(unit_price * amount):.2f}**, but your company only has **${company.capital:.2f}**.",
-                            color=discord.Color.red()
-                        ), ephemeral=True
-                    )
-                    return
-
-                # Bestehende BuyOrder checken
-                now = datetime.now()
-                expires_at = now + BUY_ORDER_DURATION
-
-                existing_order = await get_own_buy_orders(user_id, server_id, item_tag, unit_price, expires_at, is_company=True)
-
-                if existing_order:
-                    existing_order.amount += amount
-                    existing_order.expires_at = expires_at
-                    await session.commit()
-
-                    await interaction.followup.send(
-                        embed=discord.Embed(
-                            title="Company Buy Order Merged",
-                            description=(
-                                f"Merged your company buy orders for **{item_tag}** at **${unit_price}**.\n"
-                                f"New total: **{existing_order.amount}x {item_tag}** = **${existing_order.amount * unit_price}**."
-                            ),
+                    continue
+            else:
+                seller = await get_player(sell_order.user_id, server_id)
+                if seller:
+                    seller.money += total_price
+                    await add_owed_taxes(user_id=seller.id, server_id=server_id,
+                                         amount=total_price, is_company=False)
+                    try:
+                        user_obj = await interaction.client.fetch_user(sell_order.user_id)
+                        await user_obj.send(embed=discord.Embed(
+                            title="Sell Order Fulfilled",
+                            description=f"Your sell order for **{match_amount}x {item_tag}** was fulfilled for **${total_price:.2f}**.",
                             color=discord.Color.green()
-                        )
+                        ))
+                    except discord.Forbidden:
+                        pass
+
+            if sell_order.amount == match_amount:
+                await delete_sell_orders(sell_order)
+            else:
+                sell_order.amount -= match_amount
+
+            fulfilled_total += match_amount
+            total_spent += total_price
+            amount -= match_amount
+
+            await update_sell_order(sell_order)
+
+            if amount == 0:
+                await interaction.followup.send(
+                    embed=discord.Embed(
+                        title="Company Buy Order Fulfilled",
+                        description=f"You bought **{fulfilled_total}x {item_tag}** from player orders for **${total_spent:.2f}**.",
+                        color=discord.Color.green()
                     )
-                    return
+                )
+                return
 
-                # Markt initialisieren, falls nötig
-                market_entry = await get_market_item(server_id, item_tag)
-                if not market_entry:
-                    items = await get_all_items(session)
+        if fulfilled_total > 0:
+            await interaction.followup.send(
+                embed=discord.Embed(
+                    title="Buy Order Partially Fulfilled",
+                    description=f"You bought **{fulfilled_total}x {item_tag}** from player orders for **${total_spent:.2f}**.",
+                    color=discord.Color.green()
+                )
+            )
 
-                    for item in items:
-                        market_item = get_default_market_item(item, server_id)
-                        session.add(market_item)
+        # NPC-Markt?
+        if amount > 0 and unit_price >= market_entry.max_price and market_entry.stockpile > 0:
+            purchasable_amount = min(market_entry.stockpile, amount)
+            total_price = round(purchasable_amount * market_entry.max_price, 2)
 
-                    await session.commit()
-
-                market_entry = await get_market_item(server_id, item_tag)
-
-                # SELL-Orders finden
-                fulfilled_total = 0
-                total_spent = 0.0
-
-                sell_orders = await get_sell_orders(server_id, item_tag, unit_price, now)
-
-                for sell_order in sell_orders:
-                    if company.capital < sell_order.unit_price:
-                        break
-
-                    match_amount = min(amount, sell_order.amount)
-                    total_price = round(match_amount * sell_order.unit_price, 2)
-
-                    if company.capital < total_price:
-                        match_amount = int(company.capital // sell_order.unit_price)
-                        total_price = round(match_amount * sell_order.unit_price, 2)
-
-                    if match_amount <= 0:
-                        break
-
-                    # Geld abziehen
-                    company.capital -= total_price
-                    await add_company_item(session, user_id, server_id, item_tag, match_amount)
-
-                    if sell_order.is_company:
-                        company_seller = await get_company()
-                        if company_seller:
-                            company_seller.capital += total_price
-                            await add_owed_taxes(session, user_id=company_seller.entrepreneur_id, server_id=server_id, amount=total_price, is_company=True)
-
-                        else:
-                            await session.delete(sell_order)
-                            await session.commit()
-                            await interaction.followup.send(
-                                embed=discord.Embed(
-                                    title="Sell Order Removed",
-                                    description="The company for one of the sell orders no longer exists. Sell order removed.",
-                                    color=discord.Color.orange()
-                                )
-                            )
-                            continue
-                    else:
-                        seller = await get_player(sell_order.user_id, server_id)
-                        if seller:
-                            seller.money += total_price
-                            await add_owed_taxes(session, user_id=seller.id, server_id=server_id,
-                                                 amount=total_price, is_company=False)
-                            try:
-                                user_obj = await interaction.client.fetch_user(sell_order.user_id)
-                                await user_obj.send(embed=discord.Embed(
-                                    title="Sell Order Fulfilled",
-                                    description=f"Your sell order for **{match_amount}x {item_tag}** was fulfilled for **${total_price:.2f}**.",
-                                    color=discord.Color.green()
-                                ))
-                            except discord.Forbidden:
-                                pass
-
-                    if sell_order.amount == match_amount:
-                        await session.delete(sell_order)
-                    else:
-                        sell_order.amount -= match_amount
-
-                    fulfilled_total += match_amount
-                    total_spent += total_price
-                    amount -= match_amount
-
-                    await session.commit()
-
-                    if amount == 0:
-                        await interaction.followup.send(
-                            embed=discord.Embed(
-                                title="Company Buy Order Fulfilled",
-                                description=f"You bought **{fulfilled_total}x {item_tag}** from player orders for **${total_spent:.2f}**.",
-                                color=discord.Color.green()
-                            )
-                        )
-                        return
-
-                if fulfilled_total > 0:
-                    await interaction.followup.send(
-                        embed=discord.Embed(
-                            title="Buy Order Partially Fulfilled",
-                            description=f"You bought **{fulfilled_total}x {item_tag}** from player orders for **${total_spent:.2f}**.",
-                            color=discord.Color.green()
-                        )
+            if company.capital < total_price:
+                await interaction.user.send(
+                    embed=discord.Embed(
+                        title="Company Buy Order Cancelled",
+                        description=(
+                            f"Insufficient funds to fulfill the rest of the order from the NPC market.\n"
+                            f"Required: **${total_price}**, Available: **${company.capital}**"
+                        ),
+                        color=discord.Color.red()
                     )
+                )
+                await interaction.followup.send(
+                    embed=discord.Embed(
+                        title="Order Cancelled",
+                        description="You didn't have enough money for the NPC purchase. Check DMs.",
+                        color=discord.Color.red()
+                    ), ephemeral=True
+                )
+                return
 
-                # NPC-Markt?
-                if amount > 0 and unit_price >= market_entry.max_price and market_entry.stockpile > 0:
-                    purchasable_amount = min(market_entry.stockpile, amount)
-                    total_price = round(purchasable_amount * market_entry.max_price, 2)
-
-                    if company.capital < total_price:
-                        await interaction.user.send(
-                            embed=discord.Embed(
-                                title="Company Buy Order Cancelled",
-                                description=(
-                                    f"Insufficient funds to fulfill the rest of the order from the NPC market.\n"
-                                    f"Required: **${total_price}**, Available: **${company.capital}**"
-                                ),
-                                color=discord.Color.red()
-                            )
-                        )
-                        await interaction.followup.send(
-                            embed=discord.Embed(
-                                title="Order Cancelled",
-                                description="You didn't have enough money for the NPC purchase. Check DMs.",
-                                color=discord.Color.red()
-                            ), ephemeral=True
-                        )
-                        await session.commit()
-                        return
-
-                    company.capital -= total_price
-                    await add_company_item(session, user_id, server_id, item_tag, purchasable_amount)
-                    market_entry.stockpile -= purchasable_amount
+            company.capital -= total_price
+            await add_company_item(user_id, server_id, item_tag, purchasable_amount)
+            market_entry.stockpile -= purchasable_amount
 
 
 
-                    await session.commit()
+            await update_company(company)
+            await update_market_item(market_entry)
 
-                    await interaction.followup.send(
-                        embed=discord.Embed(
-                            title="NPC Market Purchase",
-                            description=f"You bought **{purchasable_amount}x {item_tag}** from the NPC market for **${(total_price/purchasable_amount):.2f}** each. Total: **${total_price:.2f}**.",
-                            color=discord.Color.green()
-                        )
-                    )
+            await interaction.followup.send(
+                embed=discord.Embed(
+                    title="NPC Market Purchase",
+                    description=f"You bought **{purchasable_amount}x {item_tag}** from the NPC market for **${(total_price/purchasable_amount):.2f}** each. Total: **${total_price:.2f}**.",
+                    color=discord.Color.green()
+                )
+            )
 
-                    # Preis anpassen
-                    factor = 1 + 0.005 * purchasable_amount
-                    market_entry.min_price = round(market_entry.min_price * factor, 2)
-                    market_entry.max_price = round(market_entry.max_price * factor, 2)
-                    return
+            # Preis anpassen
+            factor = 1 + 0.005 * purchasable_amount
+            market_entry.min_price = round(market_entry.min_price * factor, 2)
+            market_entry.max_price = round(market_entry.max_price * factor, 2)
+            await update_market_item(market_entry)
+            return
 
-                # Nicht vollständig erfüllt → neue BuyOrder anlegen
-                if amount > 0:
-                    new_order = BuyOrder(
-                        user_id=user_id,
-                        item_tag=item_tag,
-                        server_id=server_id,
-                        amount=amount,
-                        unit_price=unit_price,
-                        expires_at=expires_at,
-                        is_company=True
-                    )
-                    session.add(new_order)
-                    await session.commit()
+        # Nicht vollständig erfüllt → neue BuyOrder anlegen
+        if amount > 0:
+            new_order = BuyOrder(
+                user_id=user_id,
+                item_tag=item_tag,
+                server_id=server_id,
+                amount=amount,
+                unit_price=unit_price,
+                expires_at=expires_at,
+                is_company=True
+            )
+            await add_object(new_order, "Buy_Order")
 
-                    await interaction.followup.send(
-                        embed=discord.Embed(
-                            title="Company Buy Order Placed",
-                            description=f"A buy order for **{amount}x {item_tag}** at **${unit_price:.2f}** has been created.",
-                            color=discord.Color.green()
-                        )
-                    )
+            await interaction.followup.send(
+                embed=discord.Embed(
+                    title="Company Buy Order Placed",
+                    description=f"A buy order for **{amount}x {item_tag}** at **${unit_price:.2f}** has been created.",
+                    color=discord.Color.green()
+                )
+            )
+                    '''
             except Exception as e:
-                await session.rollback()
                 await interaction.followup.send(
                     embed=discord.Embed(
                         title="Internal Bot Error Occured",
@@ -778,6 +767,7 @@ class CompanyGroup(app_commands.Group):
                         color=discord.Color.green()
                     )
                 )
+                '''
 
 
     @app_commands.command(

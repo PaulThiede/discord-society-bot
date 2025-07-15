@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from dateutil.parser import parse
 from dataclasses import asdict
 
@@ -704,7 +704,7 @@ async def get_government(server_id: int):
     )
 
 
-async def get_gdp_entry(server_id: int, date: datetime):
+async def get_gdp_entry(server_id: int, date: date):
     response = (
         supabase.table("Government_GDP")
         .select("*")
@@ -975,3 +975,13 @@ async def delete_player_item(user_id: int, item_tag: str, server_id: int):
         .execute()
     )
     return response.data
+
+
+async def add_object(obj: Any, table_name: str):
+    response = (
+        supabase.table(table_name)
+        .insert(obj.__dict__)
+        .execute()
+    )
+    return response.data
+
