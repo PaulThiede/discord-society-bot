@@ -8,7 +8,6 @@ from src.config import JOB_SWITCH_COOLDOWN
 
 async def job(interaction: Interaction, job_type: app_commands.Choice[str]):
     print(f"{interaction.user}: /job {job_type.value}")
-    await interaction.response.defer(thinking=True)
 
     user_id = int(interaction.user.id)
     server_id = int(interaction.guild.id)

@@ -872,7 +872,7 @@ async def update_company(company: Company):
     response = (
         supabase.table("Companies")
         .update(data)
-        .eq("id", company.entrepreneur_id)
+        .eq("entrepreneur_id", company.entrepreneur_id)
         .eq("server_id", company.server_id)
         .execute()
     )

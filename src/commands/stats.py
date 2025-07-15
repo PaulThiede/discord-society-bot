@@ -7,7 +7,6 @@ from src.helper.embed_creators import create_inventory_embed
 
 async def stats(interaction: Interaction, user: User | Member = None):
     print(f"{interaction.user}: /stats: {user}")
-    await interaction.response.defer(thinking=True)
 
     target_user = user or interaction.user
     user_id = int(target_user.id)

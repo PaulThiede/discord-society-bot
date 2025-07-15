@@ -18,7 +18,6 @@ async def sell(
     amount: int = 1
 ):
     print(f"{interaction.user}: /sell item: {item}, unit_price: {unit_price}, amount: {amount}")
-    await interaction.response.defer(thinking=True)
 
     if amount <= 0 or unit_price <= 0:
         await interaction.followup.send(

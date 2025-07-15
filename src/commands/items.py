@@ -5,7 +5,6 @@ from src.helper.paginator import Paginator
 
 async def get_items(interaction: Interaction):
     print(f"{interaction.user}: /items")
-    await interaction.response.defer(thinking=True)
 
     items = await get_all_items()
 
