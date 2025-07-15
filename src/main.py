@@ -13,9 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timedelta, timezone, date
 import random
 
+from commands.ping import ping
 from db.models import Player, PlayerItem, Item, MarketItem, BuyOrder, SellOrder, Company, Government, CompanyItem, CompanyJoinRequest, GovernmentGDP
 from config import TOKEN, GUILD_ID, JOB_SWITCH_COOLDOWN, WORK_COOLDOWN, BUY_ORDER_DURATION, SELL_ORDER_DURATION, GIFT_COOLDOWN
-from db.db import get_session
+from db.db import get_session, supabase
 from util import get_hunger_depletion, get_thirst_depletion, use_item, has_item, add_item, remove_item, initialize_market_for_server, add_owed_taxes
 
 class Client(commands.Bot):
@@ -33,23 +34,9 @@ client = Client(command_prefix="!", intents=intents)
 guild_id = discord.Object(id=GUILD_ID)
 
 @client.tree.command(name="ping", description="Shows the latency of the bot", guild=guild_id)
-async def ping(interaction: discord.Interaction):
-    print(f"{interaction.user}: /ping")
-    ping_embed = discord.Embed(
-        title="Ping",
-        description="Latency in ms",
-        color=discord.Color.yellow()
-    )
-    ping_embed.add_field(
-        name=f"{client.user.name}'s Latency (ms): ",
-        value=f"{round(client.latency * 1000)}ms",
-        inline=False
-    )
-    ping_embed.set_footer(
-        text=f"Requested by {interaction.user}",
-        icon_url=interaction.user.display_avatar.url
-    )
-    await interaction.response.send_message(embed=ping_embed)
+async def init_ping(interaction: discord.Interaction):
+    await ping(interaction, client)
+
 
 @client.tree.command(name="items", description="Shows all the items and their base values", guild=guild_id)
 async def get_items(interaction: discord.Interaction):
@@ -606,9 +593,9 @@ async def farm(interaction: discord.Interaction, item: app_commands.Choice[str] 
         selected = item.value if item else random.choice(["Grain", "Leather", "Fish", "Wool"])
 
         grain = random.randint(4, 10) if has_tractor else random.randint(1, 5) if has_fertilizer else random.randint(1, 2)
-        leather = random.randint(1, 3)
-        fish = random.randint(1, 3)
-        wool = random.randint(1, 2)
+        leather = random.randint(2, 6) if has_fertilizer else random.randint(1, 3)
+        fish = random.randint(2, 6) if has_fertilizer else random.randint(1, 3)
+        wool = random.randint(1, 5) if has_fertilizer else random.randint(1, 2)
 
         resources = {
             "Grain": grain,
@@ -1907,7 +1894,9 @@ class CompanyGroup(app_commands.Group):
 
             # Abziehen
             inv_item.amount -= amount
+            print(f"Reduced company item amount by {amount}")
             if inv_item.amount <= 0:
+                print("Removed company item")
                 await session.delete(inv_item)
 
             # Update hunger/thirst/cooldown
@@ -3183,7 +3172,7 @@ async def work(interaction: discord.Interaction, item: str):
         else:
             embed.title = "Work Step Completed"
             embed.description = f"You worked on **{item}**. {worksteps_list[item_index]} steps remaining."
-        embed.add_field(name="Money", value=f"${(player.money - company.wage):.2f} -> ${company.wage:.2f} -> ${player.money:.2f}")
+        embed.add_field(name="Money", value=f"${(player.money - company.wage):.2f} + ${company.wage:.2f} -> ${player.money:.2f}")
         embed.add_field(name=f"Tool Durability", value=f"{durability} -> {durability - 1}")
         embed.add_field(name="Hunger", value=f"{old_hunger} -> {player.hunger}")
         embed.add_field(name="Thirst", value=f"{old_thirst} -> {player.thirst}")

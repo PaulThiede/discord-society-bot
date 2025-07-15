@@ -3,7 +3,7 @@ from config import WORK_COOLDOWN
 from sqlalchemy import select, update, delete
 import discord
 from db.models import Player, PlayerItem, Item, MarketItem, CompanyItem, Company, Government, GovernmentGDP
-from db.db import get_session
+from db.db import get_session, supabase
 from sqlalchemy import and_
 from sqlalchemy.future import select
 from random import randint
