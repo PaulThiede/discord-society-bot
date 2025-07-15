@@ -1441,8 +1441,8 @@ async def work(interaction: discord.Interaction, item: str):
 )
 @app_commands.describe(user="The user who owns the company that you want to join")
 async def join(interaction: discord.Interaction, user: discord.Member):
-    print(f"{interaction.user}: /join {user}")
     await interaction.response.defer(thinking=True)
+    print(f"{interaction.user}: /join {user}")
 
     requester_id = int(interaction.user.id)
     server_id = int(interaction.guild.id)
