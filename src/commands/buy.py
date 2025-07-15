@@ -98,7 +98,7 @@ async def check_existing_orders(interaction, user_id, server_id, item_tag, unit_
     now = datetime.now()
     expires_at = now + BUY_ORDER_DURATION
 
-    existing_order = await get_own_buy_orders(user_id, server_id, item_tag, unit_price, expires_at, False)
+    existing_order = await get_own_buy_orders(user_id, server_id, item_tag, unit_price, False)
 
     if existing_order:
         existing_order.amount += amount
