@@ -200,10 +200,10 @@ async def get_tax_owing_players(server_id):
             health=entry.get("health"),
             company_entrepreneur_id=entry.get("company_entrepreneur_id"),
             taxes_owed=entry.get("taxes_owed"),
-            work_cooldown_until=datetime.fromisoformat(entry.get("work_cooldown_until")),
-            job_switch_cooldown_until=datetime.fromisoformat(entry.get("job_switch_cooldown_until")),
-            company_creation_cooldown_until=datetime.fromisoformat(entry.get("company_creation_cooldown_until")),
-            gift_cooldown_until=datetime.fromisoformat(entry.get("gift_cooldown_until")),
+            work_cooldown_until=datetime.fromisoformat(str(entry.get("work_cooldown_until"))),
+            job_switch_cooldown_until=datetime.fromisoformat(str(entry.get("job_switch_cooldown_until"))),
+            company_creation_cooldown_until=datetime.fromisoformat(str(entry.get("company_creation_cooldown_until"))),
+            gift_cooldown_until=datetime.fromisoformat(str(entry.get("gift_cooldown_until"))),
         ))
 
     return players
@@ -222,7 +222,7 @@ async def get_tax_owing_companies(server_id):
         companies.append(Company(
             entrepreneur_id=entry.get("entrepreneur_id"),
             server_id=entry.get("server_id"),
-            created_at=datetime.fromisoformat(entry["created_at"]) if entry.get("created_at") else None,
+            created_at=datetime.fromisoformat(str(entry["created_at"])) if entry.get("created_at") else None,
             producible_items=entry.get("producible_items", ""),
             capital=entry.get("capital", 0),
             worksteps=entry.get("worksteps", 0),
@@ -247,7 +247,7 @@ async def get_employees(entrepreneur_id: int, server_id: int):
         players.append(Player(
             id=entry.get("id"),
             server_id=entry.get("server_id"),
-            created_at=datetime.fromisoformat(entry["created_at"]) if entry.get("created_at") else None,
+            created_at=datetime.fromisoformat(str(entry["created_at"])) if entry.get("created_at") else None,
             money=entry.get("money", 0),
             debt=entry.get("debt", 0),
             hunger=entry.get("hunger", 0),
@@ -256,10 +256,10 @@ async def get_employees(entrepreneur_id: int, server_id: int):
             health=entry.get("health", 100),
             company_entrepreneur_id=entry.get("company_entrepreneur_id"),
             taxes_owed=entry.get("taxes_owed", 0),
-            work_cooldown_until=datetime.fromisoformat(entry["work_cooldown_until"]) if entry.get("work_cooldown_until") else None,
-            job_switch_cooldown_until=datetime.fromisoformat(entry["job_switch_cooldown_until"]) if entry.get("job_switch_cooldown_until") else None,
-            company_creation_cooldown_until=datetime.fromisoformat(entry["company_creation_cooldown_until"]) if entry.get("company_creation_cooldown_until") else None,
-            gift_cooldown_until=datetime.fromisoformat(entry["gift_cooldown_until"]) if entry.get("gift_cooldown_until") else None,
+            work_cooldown_until=datetime.fromisoformat(str(entry["work_cooldown_until"])) if entry.get("work_cooldown_until") else None,
+            job_switch_cooldown_until=datetime.fromisoformat(str(entry["job_switch_cooldown_until"])) if entry.get("job_switch_cooldown_until") else None,
+            company_creation_cooldown_until=datetime.fromisoformat(str(entry["company_creation_cooldown_until"])) if entry.get("company_creation_cooldown_until") else None,
+            gift_cooldown_until=datetime.fromisoformat(str(entry["gift_cooldown_until"])) if entry.get("gift_cooldown_until") else None,
         ))
 
     return players
@@ -330,7 +330,7 @@ async def get_all_companies(server_id):
         companies.append(Company(
             entrepreneur_id=entry.get("entrepreneur_id"),
             server_id=entry.get("server_id"),
-            created_at=datetime.fromisoformat(entry["created_at"]) if entry.get("created_at") else None,
+            created_at=datetime.fromisoformat(str(entry["created_at"])) if entry.get("created_at") else None,
             producible_items=entry.get("producible_items", ""),
             capital=entry.get("capital", 0),
             worksteps=entry.get("worksteps", 0),

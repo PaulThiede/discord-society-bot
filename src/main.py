@@ -2805,9 +2805,9 @@ async def leaderboard(interaction: Interaction):
     user_id = int(interaction.user.id)
     server_id = int(interaction.guild.id)
 
-    players = get_all_players(server_id)
+    players = await get_all_players(server_id)
 
-    companies = get_all_companies(server_id)
+    companies = await get_all_companies(server_id)
 
     player_data = {p.id: {"money": p.money, "debt": p.debt, "capital": 0.0} for p in players}
     for c in companies:
