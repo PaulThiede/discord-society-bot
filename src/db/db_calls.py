@@ -414,7 +414,7 @@ async def get_company_inventory(user_id: int, server_id: int):
 
 
 
-async def get_own_sell_orders(user_id: int, server_id: int, item_tag: str, unit_price: float, expires_at: datetime, is_company: bool = False):
+async def get_own_sell_orders(user_id: int, server_id: int, item_tag: str, unit_price: float, is_company: bool = False):
     response = (
         supabase.table("Sell_Orders")
         .select("*")

@@ -354,7 +354,7 @@ class CompanyGroup(app_commands.Group):
         now = datetime.now()
         expires_at = now + BUY_ORDER_DURATION
 
-        existing_order = await get_own_sell_orders(user_id, server_id, item_tag, unit_price, now, is_company=True)
+        existing_order = await get_own_sell_orders(user_id, server_id, item_tag, unit_price, is_company=True)
 
         if existing_order:
             print("Merging orders")
@@ -594,7 +594,7 @@ class CompanyGroup(app_commands.Group):
         now = datetime.now()
         expires_at = now + BUY_ORDER_DURATION
 
-        existing_order = await get_own_buy_orders(user_id, server_id, item_tag, unit_price, expires_at, is_company=True)
+        existing_order = await get_own_buy_orders(user_id, server_id, item_tag, unit_price, is_company=True)
 
         if existing_order:
             existing_order.amount += amount
