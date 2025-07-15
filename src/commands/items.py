@@ -1,6 +1,5 @@
 from discord import Interaction, Embed, Color
 
-from src.db.db import get_session
 from src.db.db_calls import get_all_items
 from src.helper.paginator import Paginator
 

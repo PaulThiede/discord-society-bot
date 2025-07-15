@@ -3,7 +3,6 @@ from discord.ext import commands
 from discord.ext.commands import Bot
 from discord import app_commands, Embed, Interaction, User, ButtonStyle, Member
 from discord.ui import Button, View, button
-from sqlalchemy import select, delete, update, and_, asc, func
 from discord.app_commands import Choice
 
 from math import floor, ceil
@@ -14,7 +13,6 @@ from datetime import timedelta, date
 from src.commands import ping, get_items, stats, job, chop, mine, farm, harvest, drink, eat, consume, buy, sell
 from src.db.models import Player, PlayerItem, Item, MarketItem, BuyOrder, SellOrder, Company, Government, CompanyItem, CompanyJoinRequest, GovernmentGDP
 from src.config import TOKEN, GUILD_ID, JOB_SWITCH_COOLDOWN, WORK_COOLDOWN, BUY_ORDER_DURATION, SELL_ORDER_DURATION, GIFT_COOLDOWN
-from src.db.db import get_session, supabase
 from src.commands import order_view, order_remove
 from src.db.db_calls import (get_item, get_company, get_buy_orders, get_market_item, get_all_items, get_player, \
                              get_own_sell_orders, get_own_buy_orders, get_sell_orders, get_employees,

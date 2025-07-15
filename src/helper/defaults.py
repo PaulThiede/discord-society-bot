@@ -18,7 +18,7 @@ def get_default_player(id, server_id):
             created_at=datetime.datetime.utcnow()
         )
 
-async def get_default_player_item(session, user_id, server_id, item_tag, amount=1):
+async def get_default_player_item(user_id, server_id, item_tag, amount=1):
     item = await get_item(item_tag)
     if not item:
         raise Exception(f"{item_tag} not found")

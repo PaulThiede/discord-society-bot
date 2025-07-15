@@ -2,9 +2,8 @@ from discord import Interaction, User, Member, Embed, Color
 
 from datetime import datetime
 
-from src.db.db import get_session
 from src.db.db_calls import get_item, get_player, get_own_buy_orders, get_market_item, get_all_items, get_sell_orders, \
-    get_player_item, get_own_sell_orders, get_buy_orders
+    get_player_item, get_own_sell_orders, get_buy_orders, add_object, update_sell_order, delete_buy_orders, update_market_item, update_buy_order, update_player
 from src.helper.defaults import get_default_player, get_default_market_item, get_default_buy_order, \
     get_default_sell_order
 from src.helper.item import add_player_item
@@ -34,48 +33,44 @@ async def sell(
     user_id = int(interaction.user.id)
     server_id = int(interaction.guild.id)
 
-    async for session in get_session():
+    item_tag = await check_item_exists(interaction, item)
+    if not item_tag: return
 
-        item_tag = await check_item_exists(session, interaction, item)
-        if not item_tag: return
+    player = await get_player(user_id, server_id)
 
-        player = await get_player(user_id, server_id)
+    if not player:
+        player = get_default_player(user_id, server_id)
+        add_object(player, "Players")
 
-        if not player:
-            player = get_default_player(user_id, server_id)
-            session.add(player)
-            await session.commit()
+    if not await has_enough_items(interaction, player, item_tag, amount): return
 
-        if not await has_enough_items(session, interaction, player, item_tag, amount): return
+    if await check_existing_orders(interaction, user_id, server_id, item_tag, unit_price, amount): return
 
-        if await check_existing_orders(session, interaction, user_id, server_id, item_tag, unit_price, amount): return
+    await check_market_initialized(server_id, item_tag)
 
-        await check_market_initialized(session, server_id, item_tag)
+    amount = await handle_player_buy_orders(interaction, player, item_tag, unit_price, amount)
 
-        amount = await handle_player_buy_orders(session, interaction, player, item_tag, unit_price, amount)
+    market_item = await get_market_item(server_id, item_tag)
 
-        market_item = await get_market_item(server_id, item_tag)
-
-        if amount > 0 and unit_price <= market_item.min_price and market_item.stockpile > 0:
-            amount = await sell_to_npc_market(session, interaction, player, market_item, amount)
+    if amount > 0 and unit_price <= market_item.min_price and market_item.stockpile > 0:
+        amount = await sell_to_npc_market(interaction, player, market_item, amount)
 
 
-        if amount > 0:
-            now = datetime.now()
-            new_order = get_default_sell_order(user_id, item_tag, server_id, amount, unit_price,
-                                              now + SELL_ORDER_DURATION, False)
-            session.add(new_order)
-            await session.commit()
+    if amount > 0:
+        now = datetime.now()
+        new_order = get_default_sell_order(user_id, item_tag, server_id, amount, unit_price,
+                                            now + SELL_ORDER_DURATION, False)
+        add_object(new_order, "Sell_Orders")
 
-            await interaction.followup.send(
-                embed=Embed(
-                    title="Sell Order Placed",
-                    description=f"A sell order for **{amount}x {item_tag}** at **${unit_price:.2f}** has been created.",
-                    color=Color.green()
-                )
+        await interaction.followup.send(
+            embed=Embed(
+                title="Sell Order Placed",
+                description=f"A sell order for **{amount}x {item_tag}** at **${unit_price:.2f}** has been created.",
+                color=Color.green()
             )
+        )
 
-async def check_item_exists(session, interaction, item):
+async def check_item_exists(interaction, item):
     item_obj = await get_item(item)
     if not item_obj:
         await interaction.followup.send(
@@ -88,7 +83,7 @@ async def check_item_exists(session, interaction, item):
         return False
     return item_obj.item_tag
 
-async def has_enough_items(session, interaction, player, item_tag, amount):
+async def has_enough_items(interaction, player, item_tag, amount):
     inv_item = await get_player_item(player.id, player.server_id, item_tag, amount)
     if not inv_item or inv_item.amount < amount:
         await interaction.followup.send(
@@ -101,7 +96,7 @@ async def has_enough_items(session, interaction, player, item_tag, amount):
         return False
     return True
 
-async def check_existing_orders(session, interaction, user_id, server_id, item_tag, unit_price, amount):
+async def check_existing_orders(interaction, user_id, server_id, item_tag, unit_price, amount):
     now = datetime.now()
     expires_at = now + SELL_ORDER_DURATION
 
@@ -110,7 +105,7 @@ async def check_existing_orders(session, interaction, user_id, server_id, item_t
     if existing_order:
         existing_order.amount += amount
         existing_order.expires_at = expires_at
-        await session.commit()
+        await update_sell_order(existing_order)
 
         await interaction.followup.send(
             embed=Embed(
@@ -125,18 +120,16 @@ async def check_existing_orders(session, interaction, user_id, server_id, item_t
         return True
     return False
 
-async def check_market_initialized(session, server_id, item_tag):
+async def check_market_initialized(server_id, item_tag):
     if await get_market_item(server_id, item_tag) is None:
         items = await get_all_items()
 
         for item in items:
             market_item = get_default_market_item(item, server_id)
-            session.add(market_item)
-
-        await session.commit()
+            add_object(market_item, "Market_Items")
 
 
-async def handle_player_buy_orders(session, interaction, player, item_tag, unit_price, amount):
+async def handle_player_buy_orders(interaction, player, item_tag, unit_price, amount):
     total_sold = 0
     total_earned = 0.0
 
@@ -162,21 +155,21 @@ async def handle_player_buy_orders(session, interaction, player, item_tag, unit_
         if match_amount <= 0:
             break
 
-        await add_player_item(session, player.id, player.server_id, item_tag, match_amount)
-        await transfer_money(session, interaction, buy_order, total_price, match_amount, item_tag,
+        await add_player_item(player.id, player.server_id, item_tag, match_amount)
+        await transfer_money(interaction, buy_order, total_price, match_amount, item_tag,
                              "company" if buy_order.is_company else "player", "player" , seller=player)
 
 
         if buy_order.amount == match_amount:
-            await session.delete(buy_order)
+            await delete_buy_orders(buy_order.user_id, buy_order.server_id, buy_order.item_tag, buy_order.unit_price)
         else:
             buy_order.amount -= match_amount
+            await update_buy_order(buy_order)
 
         total_sold += match_amount
         total_earned += total_price
         amount -= match_amount
 
-        await session.commit()
 
         if amount == 0:
             await interaction.followup.send(
@@ -201,15 +194,16 @@ async def handle_player_buy_orders(session, interaction, player, item_tag, unit_
 
 
 
-async def sell_to_npc_market(session, interaction, player, market_item, amount):
+async def sell_to_npc_market(interaction, player, market_item, amount):
     print("    Trying to sell to NPC market")
     total_price = round(amount * market_item.min_price, 2)
 
     player.money += total_price
     market_item.stockpile += amount
-    await add_owed_taxes(session, user_id=player.id, server_id=server_id, amount=total_price, is_company=False)
+    await add_owed_taxes(user_id=player.id, server_id=player.server_id, amount=total_price, is_company=False)
 
-    await session.commit()
+    await update_player(player)
+    await update_market_item(market_item)
 
     await interaction.followup.send(
         embed=Embed(
@@ -219,6 +213,6 @@ async def sell_to_npc_market(session, interaction, player, market_item, amount):
         )
     )
 
-    await increase_npc_price(session, market_item, amount)
+    await increase_npc_price(market_item, amount)
 
     return amount

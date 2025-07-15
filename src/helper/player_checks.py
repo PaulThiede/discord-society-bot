@@ -2,6 +2,7 @@ from discord import Embed, Color
 
 from datetime import datetime
 
+from src.db.db_calls import update_player
 from src.helper.item import has_player_item
 from src.helper.randoms import get_hunger_depletion, get_thirst_depletion
 from src.config import WORK_COOLDOWN
@@ -28,6 +29,7 @@ async def check_if_on_cooldown(interaction, player):
         return True
 
     player.work_cooldown_until = now + WORK_COOLDOWN
+    update_player(player)
 
     return False
 
@@ -69,5 +71,6 @@ async def check_hunger_thirst_bar(interaction, player):
     old_thirst = player.thirst
     player.hunger = max(0, player.hunger - get_hunger_depletion())
     player.thirst = max(0, player.thirst - get_thirst_depletion())
+    update_player(player)
 
     return old_hunger, old_thirst

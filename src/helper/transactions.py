@@ -3,7 +3,7 @@ from discord import Embed, Color, Forbidden
 from datetime import date
 
 from src.db.db_calls import get_company, get_player, get_government, get_gdp_entry, add_object, update_player, \
-    update_company, update_market_item, delete_sell_orders, delete_buy_orders
+    update_company, update_market_item, delete_sell_orders, delete_buy_orders, update_government_gdp
 from src.db.models import BuyOrder, SellOrder, Player, Company
 from src.helper.defaults import get_default_government, get_default_gdp_entry
 
@@ -54,14 +54,18 @@ async def transfer_money(interaction, order: BuyOrder | SellOrder, total_price,
 
     if seller_type == "company":
         seller.capital += total_price
+        update_company(seller)
     else:
         seller.money += total_price
+        update_player(seller)
 
     if buyer_type == "company":
         buyer.capital -= total_price
+        update_company(buyer)
     else:
         buyer.money -= total_price
-
+        update_player(buyer)
+    
     await add_owed_taxes(user_id=seller.entrepreneur_id, server_id=buyer.server_id,
                          amount=total_price, is_company=True if seller_type == "company" else False)
 
@@ -122,6 +126,7 @@ async def increase_gdp(server_id: int, amount: float):
         await add_object(gdp_entry, "Government_GDP")
 
     gdp_entry.gdp_value += amount
+    update_government_gdp(gdp_entry)
 
 async def increase_npc_price(market_item, amount):
     factor = 1 + 0.005 * amount
