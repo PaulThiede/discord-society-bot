@@ -1,123 +1,109 @@
-from sqlalchemy import (
-    Column, Integer, Float, String, Boolean, Text, ForeignKey, Numeric, TIMESTAMP, BigInteger, delete, Date
-)
-from sqlalchemy.orm import declarative_base, relationship
-import datetime
-from discord.ui import View, Button
-from discord import Interaction, ButtonStyle
+from datetime import datetime
 
-from .db import get_session
-
-Base = declarative_base()
-
-class Player(Base):
-    __tablename__ = "Players"
-    id = Column(Numeric, primary_key=True)
-    server_id = Column(Numeric, primary_key=True)
-    created_at = Column(TIMESTAMP, default=datetime.datetime.utcnow)
-    money = Column(Float, default=0)
-    debt = Column(Float, default=0)
-    hunger = Column(Integer, default=100)
-    thirst = Column(Integer, default=100)
-    job = Column(String, default="")
-    health = Column(Integer, default=100)
-    company_entrepreneur_id = Column(Numeric, nullable=True)
-    taxes_owed = Column(Float, default=0)
-    work_cooldown_until = Column(TIMESTAMP)
-    job_switch_cooldown_until = Column(TIMESTAMP)
-    company_creation_cooldown_until = Column(TIMESTAMP)
-    gift_cooldown_until = Column(TIMESTAMP)
+from dataclasses import dataclass
+from typing import Optional
 
 
+@dataclass
+class Player:
+    id: int
+    server_id: int
+    created_at: datetime
+    money: float
+    debt: float
+    hunger: int
+    thirst: int
+    job: str
+    health: int
+    company_entrepreneur_id: int
+    taxes_owed: float
+    work_cooldown_until: datetime
+    job_switch_cooldown_until: datetime
+    company_creation_cooldown_until: datetime
+    gift_cooldown_until: datetime
 
+@dataclass
+class Item:
+    item_tag: str
+    producible: bool
+    ingredients: Optional[str]
+    worksteps: Optional[int]
+    base_price: float
+    durability: Optional[int]
 
-class Item(Base):
-    __tablename__ = "Items"
-    item_tag = Column(Text, primary_key=True)
-    producible = Column(Boolean)
-    ingredients = Column(Text)   # JSON wäre besser, wenn strukturiert
-    worksteps = Column(Integer)
-    base_price = Column(Float)
-    durability = Column(Integer)
+@dataclass
+class Company:
+    entrepreneur_id: int
+    server_id: int
+    created_at: datetime
+    producible_items: str
+    capital: float
+    worksteps: int
+    wage: float
+    name: str
+    taxes_owed: float
 
+@dataclass
+class MarketItem:
+    item_tag: str
+    server_id: int
+    min_price: float
+    max_price: float
+    stockpile: int
 
-class Company(Base):
-    __tablename__ = "Companies"
-    entrepreneur_id = Column(Numeric, primary_key=True)
-    server_id = Column(Numeric, primary_key=True)
-    created_at = Column(TIMESTAMP, default=datetime.datetime.utcnow)
-    producible_items = Column(Text)  # auch hier ggf. JSON später
-    capital = Column(Float)
-    worksteps = Column(Text)
-    wage = Column(Float)
-    name = Column(Text)
-    taxes_owed = Column(Float)
+@dataclass
+class PlayerItem:
+    user_id: int
+    item_tag: str
+    server_id: int
+    amount: int
+    durability: Optional[int]
 
+@dataclass
+class CompanyItem:
+    company_entrepreneur_id: int
+    item_tag: str
+    server_id: int
+    amount: int
 
-class MarketItem(Base):
-    __tablename__ = "Market_Items"
-    item_tag = Column(Text, primary_key=True)
-    server_id = Column(Numeric, primary_key=True)
-    min_price = Column(Float)
-    max_price = Column(Float)
-    stockpile = Column(BigInteger)
+@dataclass
+class CompanyJoinRequest:
+    user_id: int
+    server_id: int
+    company_entrepreneur_id: int
 
+@dataclass
+class BuyOrder:
+    user_id: int
+    item_tag: str
+    server_id: int
+    amount: int
+    unit_price: float
+    expires_at: datetime
+    is_company: bool
 
-class PlayerItem(Base):
-    __tablename__ = "Player_Items"
-    user_id = Column(Numeric, primary_key=True)
-    item_tag = Column(Text, primary_key=True)
-    server_id = Column(Numeric, primary_key=True)
-    amount = Column(BigInteger)
-    durability = Column(Integer)
+@dataclass
+class SellOrder:
+    user_id: int
+    item_tag: str
+    server_id: int
+    amount: int
+    unit_price: float
+    expires_at: datetime
+    is_company: bool
 
+@dataclass
+class Government:
+    id: int
+    created_at: datetime
+    taxrate: float
+    interest_rate: float
+    treasury: float
+    governing_role: Optional[int]
+    admin_role: Optional[int]
 
-class CompanyItem(Base):
-    __tablename__ = "Company_Items"
-    company_entrepreneur_id = Column(Numeric, primary_key=True)
-    item_tag = Column(Text, primary_key=True)
-    server_id = Column(Numeric, primary_key=True)
-    amount = Column(BigInteger)
-
-
-class CompanyJoinRequest(Base):
-    __tablename__ = "Company_Join_Requests"
-    user_id = Column(Numeric, primary_key=True)
-    server_id = Column(Numeric, primary_key=True)
-    company_entrepreneur_id = Column(Numeric, primary_key=True)
-
-class BuyOrder(Base):
-    __tablename__ = "Buy_Orders"
-    user_id = Column(Numeric, primary_key=True)
-    item_tag = Column(Text, primary_key=True)
-    server_id = Column(Numeric, primary_key=True)
-    amount = Column(BigInteger)
-    unit_price = Column(Float, primary_key=True)
-    expires_at = Column(TIMESTAMP)
-    is_company = Column(Boolean, primary_key=True)
-
-class SellOrder(Base):
-    __tablename__ = "Sell_Orders"
-    user_id = Column(Numeric, primary_key=True)
-    item_tag = Column(Text, primary_key=True)
-    server_id = Column(Numeric, primary_key=True)
-    amount = Column(BigInteger)
-    unit_price = Column(Float, primary_key=True)
-    expires_at = Column(TIMESTAMP)
-    is_company = Column(Boolean, primary_key=True)
-
-class Government(Base):
-    __tablename__ = "Government"
-    id = Column(Numeric, primary_key=True)
-    created_at = Column(TIMESTAMP, default=datetime.datetime.utcnow)
-    taxrate = Column(Float)
-    interest_rate = Column(Float)
-    treasury = Column(Float)
-    governing_role = Column(Numeric)
-    admin_role = Column(Numeric)
-
-class GovernmentGDP(Base):
-    __tablename__ = "Government_GDP"
-    server_id = Column(Numeric, primary_key=True)
-    date = Column(Date, primary_key=True)  # z.B. 2025-07-02
-    gdp_value = Column(Float, default=0.0)
+@dataclass
+class GovernmentGDP:
+    server_id: int
+    date: datetime
+    gdp_value: float

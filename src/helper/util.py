@@ -1,19 +1,16 @@
+'''
 from datetime import datetime, timedelta, date
 from config import WORK_COOLDOWN
 from sqlalchemy import select, update, delete
 import discord
 from db.models import Player, PlayerItem, Item, MarketItem, CompanyItem, Company, Government, GovernmentGDP
-from db.db import get_session
+from db.db import get_session, supabase
 from sqlalchemy import and_
 from sqlalchemy.future import select
 from random import randint
 from math import floor
 
-def get_hunger_depletion():
-    return randint(2,8)
 
-def get_thirst_depletion():
-    return randint(5,10)
 
 async def initialize_market_for_server(server_id: int):
     async for session in get_session():
@@ -32,20 +29,7 @@ async def initialize_market_for_server(server_id: int):
 
         await session.commit()
 
-async def has_item(user_id, server_id, item_tag, min_amount=1):
-    async for session in get_session():
-        result = await session.execute(
-            select(PlayerItem).where(
-                and_(
-                    PlayerItem.user_id == user_id,
-                    PlayerItem.server_id == server_id,
-                    PlayerItem.item_tag == item_tag,
-                    PlayerItem.amount >= min_amount
-                )
-            )
-        )
-        return result.scalar_one_or_none() is not None
-    return False
+
 
 async def add_item(user_id, server_id, item_tag, amount, is_company: bool = False):
     async for session in get_session():
@@ -105,48 +89,7 @@ async def add_item(user_id, server_id, item_tag, amount, is_company: bool = Fals
                 session.add(player_item)
         await session.commit()
 
-async def use_item(user_id, server_id, item_tag):
-    durability = None
-    async for session in get_session():
-        result = await session.execute(
-            select(PlayerItem).where(
-                PlayerItem.user_id == user_id,
-                PlayerItem.server_id == server_id,
-                PlayerItem.item_tag == item_tag,
-                PlayerItem.amount > 0
-            )
-        )
-        player_item = result.scalar_one_or_none()
-        if not player_item:
-            return None
 
-        if player_item.durability is None:
-            # Unzerstörbares Item
-            return None
-
-        durability = player_item.durability
-        player_item.durability -= 1
-
-
-        if player_item.durability <= 0:
-            # Durability 0 oder weniger: einen Item-Stack reduzieren
-            player_item.amount -= 1
-            if player_item.amount <= 0:
-                await session.delete(player_item)
-            else:
-                # Haltbarkeit vom Item aus der Items-Tabelle neu setzen
-                item_result = await session.execute(
-                    select(Item).where(Item.item_tag == item_tag)
-                )
-                item = item_result.scalar_one_or_none()
-                if item and item.durability is not None:
-                    # Falls es ein passendes Feld für Haltbarkeit gibt
-                    player_item.durability = item.durability
-                else:
-                    # Falls keine info vorhanden, setze auf None oder 0
-                    player_item.durability = None
-        await session.commit()
-    return durability
 
 
 async def remove_item(user_id: int, server_id: int, item_tag: str, amount: int = 1):
@@ -238,3 +181,5 @@ async def increase_gdp(session, server_id: int, amount: float):
         session.add(gdp_entry)
 
     gdp_entry.gdp_value += amount
+
+'''

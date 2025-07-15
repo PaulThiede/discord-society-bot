@@ -1,12 +1,13 @@
 import os
-from dotenv import load_dotenv
+
 from datetime import timedelta
+from dotenv import load_dotenv
 
 load_dotenv()
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = int(os.getenv("GUILD_ID"))
-DATABASE_URL = os.getenv("DATABASE_URL")
+
 JOB_SWITCH_COOLDOWN = timedelta(minutes=30)
 WORK_COOLDOWN = timedelta(minutes=5)
 GIFT_COOLDOWN = timedelta(hours=1)

@@ -10,13 +10,28 @@ from math import floor, ceil
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-from datetime import datetime, timedelta, timezone, date
-import random
+from datetime import timedelta, date
 
+from commands import ping, get_items, stats, job, chop, mine, farm, harvest, drink, eat, consume, buy, sell
 from db.models import Player, PlayerItem, Item, MarketItem, BuyOrder, SellOrder, Company, Government, CompanyItem, CompanyJoinRequest, GovernmentGDP
 from config import TOKEN, GUILD_ID, JOB_SWITCH_COOLDOWN, WORK_COOLDOWN, BUY_ORDER_DURATION, SELL_ORDER_DURATION, GIFT_COOLDOWN
-from db.db import get_session
-from util import get_hunger_depletion, get_thirst_depletion, use_item, has_item, add_item, remove_item, initialize_market_for_server, add_owed_taxes
+from db.db import get_session, supabase
+from src.commands import order_view, order_remove
+from src.db.db_calls import (get_item, get_company, get_buy_orders, get_market_item, get_all_items, get_player, \
+                             get_own_sell_orders, get_own_buy_orders, get_sell_orders, get_employees,
+                             get_company_inventory, \
+                             get_producible_items, get_company_item, get_user_join_request, get_item_buy_orders,
+                             get_item_sell_orders, \
+                             get_government, get_tax_owing_players, get_tax_owing_companies, get_all_gdp_entries,
+                             get_join_requests, \
+                             get_player_item, update_player, update_buy_order, update_company, update_company_item,
+                             update_company_join_request, \
+                             update_government, update_government_gdp, update_market_item, update_player_item,
+                             update_sell_order, delete_company_item)
+from src.helper.defaults import get_default_market_item
+from src.helper.item import add_company_item, add_player_item, has_player_item, use_item
+from src.helper.randoms import get_hunger_depletion, get_thirst_depletion
+from src.helper.transactions import add_owed_taxes
 
 class Client(commands.Bot):
     async def on_ready(self):
@@ -33,86 +48,14 @@ client = Client(command_prefix="!", intents=intents)
 guild_id = discord.Object(id=GUILD_ID)
 
 @client.tree.command(name="ping", description="Shows the latency of the bot", guild=guild_id)
-async def ping(interaction: discord.Interaction):
-    print(f"{interaction.user}: /ping")
-    ping_embed = discord.Embed(
-        title="Ping",
-        description="Latency in ms",
-        color=discord.Color.yellow()
-    )
-    ping_embed.add_field(
-        name=f"{client.user.name}'s Latency (ms): ",
-        value=f"{round(client.latency * 1000)}ms",
-        inline=False
-    )
-    ping_embed.set_footer(
-        text=f"Requested by {interaction.user}",
-        icon_url=interaction.user.display_avatar.url
-    )
-    await interaction.response.send_message(embed=ping_embed)
+async def init_ping(interaction: Interaction):
+    await ping(interaction, client)
+
+
 
 @client.tree.command(name="items", description="Shows all the items and their base values", guild=guild_id)
-async def get_items(interaction: discord.Interaction):
-    print(f"{interaction.user}: /items")
-    await interaction.response.defer(thinking=True, ephemeral=True)
-
-    async for session in get_session():
-        result = await session.execute(select(Item))
-        items = result.scalars().all()
-
-    if not items:
-        await interaction.followup.send("No items found.")
-        return
-
-    items_per_page = 10
-    max_page = (len(items) - 1) // items_per_page
-
-    def get_page_embed(page: int) -> discord.Embed:
-        embed = discord.Embed(
-            title=f"Item List (Page {page + 1}/{max_page + 1})",
-            description="List of all registered items",
-            color=discord.Color.green()
-        )
-        for item in items[page * items_per_page:(page + 1) * items_per_page]:
-            embed.add_field(
-                name=item.item_tag,
-                value=f"Base Price: {item.base_price}",
-                inline=False
-            )
-        return embed
-
-    class Paginator(discord.ui.View):
-        def __init__(self):
-            super().__init__(timeout=60)
-            self.page = 0
-
-        @discord.ui.button(label="⏮️", style=discord.ButtonStyle.secondary)
-        async def first(self, interaction_btn: discord.Interaction, _):
-            self.page = 0
-            await interaction_btn.response.edit_message(embed=get_page_embed(self.page), view=self)
-
-        @discord.ui.button(label="⬅️", style=discord.ButtonStyle.primary)
-        async def previous(self, interaction_btn: discord.Interaction, _):
-            if self.page > 0:
-                self.page -= 1
-                await interaction_btn.response.edit_message(embed=get_page_embed(self.page), view=self)
-            else:
-                await interaction_btn.response.defer()
-
-        @discord.ui.button(label="➡️", style=discord.ButtonStyle.primary)
-        async def next(self, interaction_btn: discord.Interaction, _):
-            if self.page < max_page:
-                self.page += 1
-                await interaction_btn.response.edit_message(embed=get_page_embed(self.page), view=self)
-            else:
-                await interaction_btn.response.defer()
-
-        @discord.ui.button(label="⏭️", style=discord.ButtonStyle.secondary)
-        async def last(self, interaction_btn: discord.Interaction, _):
-            self.page = max_page
-            await interaction_btn.response.edit_message(embed=get_page_embed(self.page), view=self)
-
-    await interaction.followup.send(embed=get_page_embed(0), view=Paginator())
+async def init_items(interaction: Interaction):
+    await get_items(interaction)
 
 
 @client.tree.command(
@@ -121,82 +64,8 @@ async def get_items(interaction: discord.Interaction):
     guild=guild_id
 )
 @app_commands.describe(user="The stats of the user you wish to see the stats of")
-async def stats(interaction: discord.Interaction, user: discord.User | discord.Member = None):
-    print(f"{interaction.user}: /stats: {user}")
-    await interaction.response.defer(thinking=True)
-
-    target_user = user or interaction.user
-    user_id = int(target_user.id)
-    server_id = int(interaction.guild.id)
-
-    async for session in get_session():
-        result = await session.execute(
-            select(Player).where(Player.id == user_id, Player.server_id == server_id)
-        )
-        player = result.scalar_one_or_none()
-
-        if not player:
-            # Standardwerte
-            player = Player(
-                id=user_id,
-                server_id=server_id,
-                money=100.0,
-                debt=0.0,
-                hunger=100,
-                thirst=100,
-                health=100,
-                job=None,
-                created_at=datetime.utcnow()
-            )
-            session.add(player)
-            await session.commit()
-
-        embed = discord.Embed(
-            title=f"Stats for {target_user.display_name}",
-            color=discord.Color.yellow()
-        )
-        embed.add_field(name="Money", value=f"{player.money:.2f}", inline=True)
-        embed.add_field(name="Debt", value=f"{player.debt:.2f}", inline=True)
-        embed.add_field(name="Health", value=f"{player.health}", inline=True)
-        embed.add_field(name="Hunger", value=f"{player.hunger}", inline=True)
-        embed.add_field(name="Thirst", value=f"{player.thirst}", inline=True)
-        embed.add_field(name="Job", value=player.job or "None", inline=True)
-        embed.add_field(name="Taxes Owed", value=f"{player.taxes_owed:.2f}", inline=True)
-        embed.set_footer(text=f"User ID: {target_user.id}")
-
-        # Spieler-Inventar abfragen
-        result_items = await session.execute(
-            select(PlayerItem).where(
-                PlayerItem.user_id == user_id,
-                PlayerItem.server_id == server_id
-            )
-        )
-        items = result_items.scalars().all()
-
-        if items:
-            inventory_lines = []
-            for item in items:
-                line = f"{item.amount}x {item.item_tag}"
-                if item.durability is not None:
-                    line += f" (Durability: {item.durability})"
-                inventory_lines.append(line)
-            inventory_str = "\n".join(inventory_lines)
-            embed.add_field(name="Inventory", value=inventory_str, inline=False)
-        else:
-            embed.add_field(name="Inventory", value="Empty", inline=False)
-
-
-        await interaction.followup.send(embed=embed)
-
-
-
-
-
-
-
-
-
-
+async def init_stats(interaction: Interaction, user: discord.User | discord.Member = None):
+    await stats(interaction, user)
 
 
 @client.tree.command(
@@ -216,339 +85,18 @@ async def stats(interaction: discord.Interaction, user: discord.User | discord.M
     app_commands.Choice(name="entrepreneur", value="Entrepreneur"),
     app_commands.Choice(name="jobless", value="")  # Empty string means no job
 ])
-async def job(interaction: discord.Interaction, job_type: app_commands.Choice[str]):
-    print(f"{interaction.user}: /job {job_type.value}")
-    await interaction.response.defer(thinking=True, ephemeral=False)
-
-    user_id = int(interaction.user.id)
-    server_id = int(interaction.guild.id)
-    now = datetime.now()
-
-
-    async for session in get_session():
-        result = await session.execute(
-            select(Player).where(Player.id == user_id, Player.server_id == server_id)
-        )
-        player = result.scalar_one_or_none()
-        if player:
-            if player.job == job_type.value:
-                embed = discord.Embed(
-                    title="Job Change Failed",
-                    description=f"❌ You already have the job **{job_type.value or 'jobless'}**.",
-                    color=discord.Color.red()
-                )
-                await interaction.followup.send(embed=embed, ephemeral=True)
-                return
-
-
-            if player.job_switch_cooldown_until and player.job_switch_cooldown_until > now:
-                cooldown_ts = int(player.job_switch_cooldown_until.timestamp())
-                embed = discord.Embed(
-                    title="Cooldown Active",
-                    description=f"⏳ You can change your job again <t:{cooldown_ts}:R>.",
-                    color=discord.Color.red()
-                )
-                await interaction.followup.send(embed=embed, ephemeral=True)
-                return
-
-            player.job = job_type.value
-            player.company_entrepreneur_id = None
-            player.job_switch_cooldown_until = now + JOB_SWITCH_COOLDOWN
-        else:
-            player = Player(
-                id=user_id,
-                server_id=server_id,
-                money=100.0,
-                debt=0.0,
-                hunger=100,
-                thirst=100,
-                health=100,
-                job=job_type.value,
-                job_switch_cooldown_until=now + JOB_SWITCH_COOLDOWN,
-                created_at=now
-            )
-            session.add(player)
-
-        await session.commit()
-
-    desc = (
-        f"{interaction.user.mention} quit their job and is now jobless."
-        if job_type.value == ""
-        else f"{interaction.user.mention} changed their job to **{job_type.value}**."
-    )
-
-    embed = discord.Embed(
-        title="Job Change",
-        description=desc,
-        color=discord.Color.green()
-    )
-    embed.set_footer(text=f"User ID: {user_id}")
-
-    await interaction.followup.send(embed=embed)
-
-
-
-
-
-
-
+async def init_job(interaction: Interaction, job_type: app_commands.Choice[str]):
+    await job(interaction, job_type)
 
 
 @client.tree.command(name="chop", description="Used by lumberjacks to chop down trees.", guild=guild_id)
-async def chop(interaction: discord.Interaction):
-    print(f"{interaction.user}: /chop")
-    await interaction.response.defer(thinking=True)
-
-    user_id = int(interaction.user.id)
-    server_id = int(interaction.guild.id)
-    now = datetime.now()
-
-    async for session in get_session():
-        # Player laden
-        result = await session.execute(
-            select(Player).where(Player.id == user_id, Player.server_id == server_id)
-        )
-        player = result.scalar_one_or_none()
-
-        if not player:
-            await interaction.followup.send(embed=discord.Embed(
-                title="Error!",
-                description="Player not found. Please start first.",
-                color=discord.Color.red()
-            ), ephemeral=True)
-            return
-
-        if player.job != "Lumberjack":
-            await interaction.followup.send(embed=discord.Embed(
-                title="Error!",
-                description="You are not a lumberjack!",
-                color=discord.Color.red()
-            ), ephemeral=True)
-            return
-
-        # Cooldown check
-        if player.work_cooldown_until and player.work_cooldown_until > now:
-            cooldown_ts = int(player.work_cooldown_until.timestamp())
-            await interaction.followup.send(embed=discord.Embed(
-                title="Cooldown Active",
-                description=f"⏳ You can work again <t:{cooldown_ts}:R>.",
-                color=discord.Color.red()
-            ), ephemeral=True)
-            return
-
-        # Werkzeuge prüfen
-        has_axe = await has_item(user_id, server_id, "Axe")
-        has_chainsaw = await has_item(user_id, server_id, "Chainsaw")
-        if not (has_axe or has_chainsaw):
-            await interaction.followup.send(embed=discord.Embed(
-                title="Error!",
-                description="You don't have an axe or chainsaw! How do you expect to chop down trees without it?",
-                color=discord.Color.red()
-            ), ephemeral=True)
-            return
-
-        # Hunger/Thirst prüfen
-        if player.hunger <= 0:
-            await interaction.followup.send(embed=discord.Embed(
-                title="Error!",
-                description="You are too hungry to work!",
-                color=discord.Color.red()
-            ), ephemeral=True)
-            return
-        if player.thirst <= 0:
-            await interaction.followup.send(embed=discord.Embed(
-                title="Error!",
-                description="You are too thirsty to work!",
-                color=discord.Color.red()
-            ), ephemeral=True)
-            return
-
-        # Ressourcen generieren
-        import random
-        resource_type = random.choice(["Wood", "Rubber"])
-
-        if has_chainsaw:
-            wood_amount = random.randint(2, 6)
-            rubber_amount = random.randint(1, 3)
-            used_tool = "Chainsaw"
-        else:
-            wood_amount = random.randint(1, 3)
-            rubber_amount = 1
-            used_tool = "Axe"
-
-        amount = wood_amount if resource_type == "Wood" else rubber_amount
-
-        # Werkzeug-Haltbarkeit reduzieren
-        durability = await use_item(user_id, server_id, used_tool)
-
-        # Items hinzufügen
-        await add_item(user_id, server_id, resource_type, amount)
-
-        # Hunger und Durst reduzieren (Beispiel: -5 pro Arbeit)
-        old_hunger = player.hunger
-        old_thirst = player.thirst
-        player.hunger = max(0, player.hunger - get_hunger_depletion())
-        player.thirst = max(0, player.thirst - get_thirst_depletion())
-
-        # Cooldown setzen
-        player.work_cooldown_until = now + WORK_COOLDOWN
-
-        await session.commit()
-
-        # Antwort-Embed
-        embed = discord.Embed(
-            title="Success!",
-            description=f"You just chopped and gained {amount}x {resource_type}!",
-            color=discord.Color.green()
-        )
-        embed.add_field(name=f"{used_tool} Durability", value=f"{durability} -> {durability-1}")
-        embed.add_field(name="Hunger", value=f"{old_hunger} -> {player.hunger}")
-        embed.add_field(name="Thirst", value=f"{old_thirst} -> {player.thirst}")
-
-        await interaction.followup.send(embed=embed)
-
-
-
-
-
-
-
+async def init_chop(interaction: Interaction):
+    await chop(interaction)
 
 
 @client.tree.command(name="mine", description="Used by miners to mine resources.", guild=guild_id)
-async def mine(interaction: discord.Interaction):
-    print(f"{interaction.user}: /mine")
-    await interaction.response.defer(thinking=True)
-
-    user_id = int(interaction.user.id)
-    server_id = int(interaction.guild.id)
-    now = datetime.now()
-
-    async for session in get_session():
-        # Spieler laden
-        result = await session.execute(
-            select(Player).where(Player.id == user_id, Player.server_id == server_id)
-        )
-        player = result.scalar_one_or_none()
-
-        if not player:
-            await interaction.followup.send(embed=discord.Embed(
-                title="Error!",
-                description="Player not found. Please start first.",
-                color=discord.Color.red()
-            ), ephemeral=True)
-            return
-
-        if player.job != "Miner":
-            await interaction.followup.send(embed=discord.Embed(
-                title="Error!",
-                description="You are not a miner!",
-                color=discord.Color.red()
-            ), ephemeral=True)
-            return
-
-        # Cooldown check
-        if player.work_cooldown_until and player.work_cooldown_until > now:
-            cooldown_ts = int(player.work_cooldown_until.timestamp())
-            await interaction.followup.send(embed=discord.Embed(
-                title="Cooldown Active",
-                description=f"⏳ You can work again <t:{cooldown_ts}:R>.",
-                color=discord.Color.red()
-            ), ephemeral=True)
-            return
-
-        # Werkzeuge prüfen
-        has_pickaxe = await has_item(user_id, server_id, "Pickaxe")
-        has_mining_machine = await has_item(user_id, server_id, "Mining Machine")
-        if not (has_pickaxe or has_mining_machine):
-            await interaction.followup.send(embed=discord.Embed(
-                title="Error!",
-                description="You don't have a pickaxe or mining machine! How do you expect to mine resources without it?",
-                color=discord.Color.red()
-            ), ephemeral=True)
-            return
-
-        # Hunger/Thirst prüfen
-        if player.hunger <= 0:
-            await interaction.followup.send(embed=discord.Embed(
-                title="Error!",
-                description="You are too hungry to work!",
-                color=discord.Color.red()
-            ), ephemeral=True)
-            return
-        if player.thirst <= 0:
-            await interaction.followup.send(embed=discord.Embed(
-                title="Error!",
-                description="You are too thirsty to work!",
-                color=discord.Color.red()
-            ), ephemeral=True)
-            return
-
-        # Ressourcen generieren
-        resource = random.randint(0, 3)  # 0=Iron,1=Minerals,2=Coal,3=Phosphorus
-
-        if has_mining_machine:
-            iron = random.randint(5, 12)
-            minerals = random.randint(3, 6)
-            coal = random.randint(5, 12)
-            phosphorus = random.randint(7, 15)
-            used_tool = "Mining Machine"
-        else:
-            iron = random.randint(1, 2)
-            minerals = 1
-            coal = random.randint(1, 2)
-            phosphorus = random.randint(1, 4)
-            used_tool = "Pickaxe"
-
-        if resource == 0:
-            item_tag = "Iron"
-            amount = iron
-        elif resource == 1:
-            item_tag = "Minerals"
-            amount = minerals
-        elif resource == 2:
-            item_tag = "Coal"
-            amount = coal
-        else:
-            item_tag = "Phosphorus"
-            amount = phosphorus
-
-        # Werkzeug-Haltbarkeit reduzieren
-        durability = await use_item(user_id, server_id, used_tool)
-
-        # Items hinzufügen
-        await add_item(user_id, server_id, item_tag, amount)
-
-        # Hunger und Durst reduzieren
-        old_hunger = player.hunger
-        old_thirst = player.thirst
-        player.hunger = max(0, player.hunger - get_hunger_depletion())
-        player.thirst = max(0, player.thirst - get_thirst_depletion())
-
-        # Cooldown setzen
-        player.work_cooldown_until = now + WORK_COOLDOWN
-
-        await session.commit()
-
-        # Antwort-Embed
-        embed = discord.Embed(
-            title="Success!",
-            description=f"You just mined and gained {amount}x {item_tag}!",
-            color=discord.Color.green()
-        )
-        embed.add_field(name=f"{used_tool} Durability", value=f"{durability} -> {durability-1}")
-        embed.add_field(name="Hunger", value=f"{old_hunger} -> {player.hunger}")
-        embed.add_field(name="Thirst", value=f"{old_thirst} -> {player.thirst}")
-
-        await interaction.followup.send(embed=embed)
-
-
-
-
-
-
-
-
+async def init_mine(interaction: discord.Interaction):
+    await mine(interaction)
 
 
 @client.tree.command(name="farm", description="Used by farmers to harvest crops.", guild=guild_id)
@@ -559,318 +107,23 @@ async def mine(interaction: discord.Interaction):
     app_commands.Choice(name="fish", value="Fish"),
     app_commands.Choice(name="leather", value="Leather"),
 ])
-async def farm(interaction: discord.Interaction, item: app_commands.Choice[str] = None):
-    print(f"{interaction.user}: /farm {item}")
-    await interaction.response.defer(thinking=True)
-    now = datetime.now()
-    user_id = int(interaction.user.id)
-    server_id = int(interaction.guild.id)
-
-    async for session in get_session():
-        result = await session.execute(
-            select(Player).where(Player.id == user_id, Player.server_id == server_id)
-        )
-        player = result.scalar_one_or_none()
-        if not player or player.job != "Farmer":
-            embed = discord.Embed(
-                title="Error!",
-                description="You are not a farmer!",
-                color=discord.Color.red()
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            return
-
-        if player.hunger <= 0 or player.thirst <= 0:
-            embed = discord.Embed(
-                title="Error!",
-                description="You are too hungry or thirsty to work!",
-                color=discord.Color.red()
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            return
-
-        if player.work_cooldown_until and player.work_cooldown_until > now:
-            ts = int(player.work_cooldown_until.timestamp())
-            embed = discord.Embed(
-                title="Cooldown Active",
-                description=f"You can work again <t:{ts}:R>.",
-                color=discord.Color.red()
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            return
-
-        # Tool checks
-        has_fertilizer = await has_item(user_id, server_id, "Fertilizer")
-        has_tractor = await has_item(user_id, server_id, "Tractor")
-
-        selected = item.value if item else random.choice(["Grain", "Leather", "Fish", "Wool"])
-
-        grain = random.randint(4, 10) if has_tractor else random.randint(1, 5) if has_fertilizer else random.randint(1, 2)
-        leather = random.randint(1, 3)
-        fish = random.randint(1, 3)
-        wool = random.randint(1, 2)
-
-        resources = {
-            "Grain": grain,
-            "Leather": leather,
-            "Fish": fish,
-            "Wool": wool
-        }
-
-        amount = resources[selected]
-
-        # Apply tool usage
-        used_tool = "Tractor" if has_tractor else "Fertilizer" if has_fertilizer else None
-        durability = None
-        if used_tool:
-            durability = await use_item(user_id, server_id, used_tool)
-
-        await add_item(user_id, server_id, selected, amount)
-
-        # Update hunger/thirst/cooldown
-        old_hunger = player.hunger
-        old_thirst = player.thirst
-        player.hunger = max(0, player.hunger - get_hunger_depletion())
-        player.thirst = max(0, player.thirst - get_thirst_depletion())
-        player.work_cooldown_until = now + WORK_COOLDOWN
-        await session.commit()
-
-        # Embed
-        embed = discord.Embed(
-            title="Success!",
-            description=f"You just harvested crops and gained {amount}x {selected}!",
-            color=discord.Color.green()
-        )
-        if used_tool and durability is not None:
-            embed.add_field(
-                name=f"{used_tool} Durability",
-                value=f"{durability} -> {durability-1}"
-            )
-        embed.add_field(name="Hunger", value=f"{old_hunger} -> {player.hunger}")
-        embed.add_field(name="Thirst", value=f"{old_thirst} -> {player.thirst}")
-
-        await interaction.followup.send(embed=embed)
-
-
-
-
-
-
-
+async def init_farm(interaction: Interaction, item: app_commands.Choice[str] = None):
+    await farm(interaction, item)
 
 
 @client.tree.command(name="harvest", description="Used by special jobs to harvest their unique resource.", guild=guild_id)
-async def harvest(interaction: discord.Interaction):
-    print(f"{interaction.user}: /harvest")
-    await interaction.response.defer(thinking=True)
-    now = datetime.now()
-    user_id = int(interaction.user.id)
-    server_id = int(interaction.guild.id)
-
-    async for session in get_session():
-        result = await session.execute(
-            select(Player).where(Player.id == user_id, Player.server_id == server_id)
-        )
-        player = result.scalar_one_or_none()
-
-        if not player or player.job not in ["Special Job: Water", "Special Job: Natural Gas", "Special Job: Petroleum"]:
-            embed = discord.Embed(
-                title="Error!",
-                description="You are not a special job!",
-                color=discord.Color.red()
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            return
-
-        if player.hunger <= 0 or player.thirst <= 0:
-            embed = discord.Embed(
-                title="Error!",
-                description="You are too hungry or thirsty to work!",
-                color=discord.Color.red()
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            return
-
-        if player.work_cooldown_until and player.work_cooldown_until > now:
-            ts = int(player.work_cooldown_until.timestamp())
-            embed = discord.Embed(
-                title="Cooldown Active",
-                description=f"You can work again <t:{ts}:R>.",
-                color=discord.Color.red()
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            return
-
-        # Werkzeuglogik + Ressourcenlogik
-        job_tool_map = {
-            "Special Job: Water": "Water Cleaning",
-            "Special Job: Natural Gas": "Gas Pipeline",
-            "Special Job: Petroleum": "Oil Drilling Machine"
-        }
-        item_tag_map = {
-            "Special Job: Water": "Water",
-            "Special Job: Natural Gas": "Natural Gas",
-            "Special Job: Petroleum": "Petroleum"
-        }
-
-        job_name = player.job
-        item_tag = item_tag_map[job_name]
-        tool_name = job_tool_map[job_name]
-        has_tool = await has_item(user_id, server_id, tool_name)
-
-        amount = random.randint(1, 3) if has_tool else 1
-        await add_item(user_id, server_id, item_tag, amount)
-
-        old_hunger = player.hunger
-        old_thirst = player.thirst
-        player.hunger = max(0, player.hunger - get_hunger_depletion())
-        player.thirst = max(0, player.thirst - get_thirst_depletion())
-        player.work_cooldown_until = now + WORK_COOLDOWN
-        await session.commit()
-
-        embed = discord.Embed(
-            title="Success!",
-            description=f"You just harvested your special resources and gained {amount}x {item_tag}!",
-            color=discord.Color.green()
-        )
-        if has_tool:
-            durability = await use_item(user_id, server_id, tool_name)
-            embed.add_field(name=f"{tool_name} Durability", value=f"{durability} -> {durability-1}")
-
-        embed.add_field(name="Hunger", value=f"{old_hunger} -> {player.hunger}")
-        embed.add_field(name="Thirst", value=f"{old_thirst} -> {player.thirst}")
-
-        await interaction.followup.send(embed=embed)
-
-
-
-
-
-
-
-
-
+async def init_harvest(interaction: Interaction):
+    await harvest(interaction)
 
 
 @client.tree.command(name="drink", description="Consumes 1 water from your inventory and fills up your thirst bar.", guild=guild_id)
-async def drink(interaction: discord.Interaction):
-    print(f"{interaction.user}: /drink")
-    await interaction.response.defer(thinking=True)
-    user_id = int(interaction.user.id)
-    server_id = int(interaction.guild.id)
-
-    async for session in get_session():
-        result = await session.execute(
-            select(Player).where(Player.id == user_id, Player.server_id == server_id)
-        )
-        player = result.scalar_one_or_none()
-
-        if not player:
-            embed = discord.Embed(
-                title="Error!",
-                description="You don't have a character yet.",
-                color=discord.Color.red()
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            return
-
-        if player.thirst >= 100:
-            embed = discord.Embed(
-                title="Error!",
-                description="Your thirst bar is completely full! There is no need to drink!",
-                color=discord.Color.red()
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            return
-
-        has_water = await has_item(user_id, server_id, "Water")
-        if not has_water:
-            embed = discord.Embed(
-                title="Error!",
-                description="You don't have any water!",
-                color=discord.Color.red()
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            return
-
-        await remove_item(user_id, server_id, "Water", 1)
-        player.thirst = 100
-        await session.commit()
-
-        embed = discord.Embed(
-            title="Success!",
-            description="You just consumed one water! Your thirst bar is now full again!",
-            color=discord.Color.green()
-        )
-        await interaction.followup.send(embed=embed)
-
-
-
-
-
-
-
-
+async def init_drink(interaction: Interaction):
+    await drink(interaction)
 
 
 @client.tree.command(name="eat", description="Consumes 1 grocery from your inventory and fills up your hunger bar.", guild=guild_id)
-async def eat(interaction: discord.Interaction):
-    print(f"{interaction.user}: /eat")
-    await interaction.response.defer(thinking=True)
-    user_id = int(interaction.user.id)
-    server_id = int(interaction.guild.id)
-
-    async for session in get_session():
-        result = await session.execute(
-            select(Player).where(Player.id == user_id, Player.server_id == server_id)
-        )
-        player = result.scalar_one_or_none()
-
-        if not player:
-            embed = discord.Embed(
-                title="Error!",
-                description="You don't have a character yet.",
-                color=discord.Color.red()
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            return
-
-        if player.hunger >= 100:
-            embed = discord.Embed(
-                title="Error!",
-                description="Your hunger bar is completely full! There is no need to eat!",
-                color=discord.Color.red()
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            return
-
-        has_groceries = await has_item(user_id, server_id, "Grocery")
-        if not has_groceries:
-            embed = discord.Embed(
-                title="Error!",
-                description="You don't have any groceries!",
-                color=discord.Color.red()
-            )
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            return
-
-        await remove_item(user_id, server_id, "Grocery", 1)
-        player.hunger = 100
-        await session.commit()
-
-        embed = discord.Embed(
-            title="Success!",
-            description="You just consumed one grocery! Your hunger bar is now full again!",
-            color=discord.Color.green()
-        )
-        await interaction.followup.send(embed=embed)
-
-
-
-
-
-
-
+async def init_eat(interaction: discord.Interaction):
+    await eat(interaction)
 
 
 @client.tree.command(
@@ -880,118 +133,12 @@ async def eat(interaction: discord.Interaction):
 )
 @app_commands.describe(item="The item you want to consume")
 @app_commands.choices(item=[
-    app_commands.Choice(name="Water", value="Water"),
-    app_commands.Choice(name="Grocery", value="Grocery"),
-    app_commands.Choice(name="Fish", value="Fish")
+    app_commands.Choice(name="water", value="Water"),
+    app_commands.Choice(name="grocery", value="Grocery"),
+    app_commands.Choice(name="fish", value="Fish")
 ])
-async def consume(interaction: discord.Interaction, item: app_commands.Choice[str]):
-    print(f"{interaction.user}: /consume {item.value}")
-    await interaction.response.defer(ephemeral=True, thinking=True)
-
-    user_id = int(interaction.user.id)
-    server_id = int(interaction.guild.id)
-    item_tag = item.value
-
-    async for session in get_session():
-        result = await session.execute(
-            select(Player).where(Player.id == user_id, Player.server_id == server_id)
-        )
-        player = result.scalar_one_or_none()
-
-        if not player:
-            embed = discord.Embed(
-                title="Error!",
-                description="You don't have a character yet!",
-                color=discord.Color.red()
-            )
-            await interaction.followup.send(embed=embed)
-            return
-
-        result = await session.execute(
-            select(PlayerItem).where(
-                PlayerItem.user_id == user_id,
-                PlayerItem.server_id == server_id,
-                func.lower(PlayerItem.item_tag) == item.lower()
-            )
-        )
-        player_item = result.scalar_one_or_none()
-
-        if not player_item or player_item.amount < 1:
-            embed = discord.Embed(
-                title="Error!",
-                description=f"You don't have {item_tag}!",
-                color=discord.Color.red()
-            )
-            await interaction.followup.send(embed=embed)
-            return
-
-        hunger = player.hunger
-        thirst = player.thirst
-        success_embed = None
-
-        if item_tag == "Water":
-            if thirst >= 100:
-                embed = discord.Embed(
-                    title="Error!",
-                    description="Your thirst bar is completely full! There is no need to drink!",
-                    color=discord.Color.red()
-                )
-                await interaction.followup.send(embed=embed)
-                return
-            player.thirst = 100
-            await remove_item(user_id, server_id, "Water", 1)
-            success_embed = discord.Embed(
-                title="Success!",
-                description="You just consumed one water! Your thirst bar is now full again!",
-                color=discord.Color.green()
-            )
-
-        elif item_tag == "Grocery":
-            if hunger >= 100:
-                embed = discord.Embed(
-                    title="Error!",
-                    description="Your hunger bar is completely full! There is no need to eat!",
-                    color=discord.Color.red()
-                )
-                await interaction.followup.send(embed=embed)
-                return
-            player.hunger = 100
-            await remove_item(user_id, server_id, "Grocery", 1)
-            success_embed = discord.Embed(
-                title="Success!",
-                description="You just consumed one grocery! Your hunger bar is now full again!",
-                color=discord.Color.green()
-            )
-
-        elif item_tag == "Fish":
-            if hunger >= 100 and thirst >= 100:
-                embed = discord.Embed(
-                    title="Error!",
-                    description="Your thirst and hunger bar are completely full! There is no need to consume fish!",
-                    color=discord.Color.red()
-                )
-                await interaction.followup.send(embed=embed)
-                return
-            player.hunger = min(hunger + 15, 100)
-            player.thirst = min(thirst + 5, 100)
-            await remove_item(user_id, server_id, "Fish", 1)
-            success_embed = discord.Embed(
-                title="Success!",
-                description=f"You just consumed one fish!\nThirst bar: {player.thirst}%\nHunger bar: {player.hunger}%",
-                color=discord.Color.green()
-            )
-
-        session.add(player)
-        await session.commit()
-
-        if success_embed:
-            await interaction.followup.send(embed=success_embed)
-
-
-
-
-
-
+async def init_consume(interaction: discord.Interaction, item: app_commands.Choice[str]):
+   await consume(interaction, item)
 
 
 @client.tree.command(
@@ -1004,284 +151,12 @@ async def consume(interaction: discord.Interaction, item: app_commands.Choice[st
     unit_price="Maximum price you're willing to pay per unit",
     amount="How many you want to buy (default: 1)"
 )
-async def buy(
+async def init_buy(
     interaction: discord.Interaction,
     item: str,
     unit_price: float,
-    amount: int = 1
-):
-    await interaction.response.defer(thinking=True)
-    print(f"{interaction.user}: /buy item: {item}, unit_price: {unit_price}, amount: {amount}")
-
-    if amount <= 0 or unit_price <= 0:
-        await interaction.followup.send(
-            embed=discord.Embed(
-                title="Error!",
-                description="Amount and unit price must be greater than 0.",
-                color=discord.Color.red()
-            ), ephemeral=True
-        )
-        return
-
-    user_id = int(interaction.user.id)
-    server_id = int(interaction.guild.id)
-
-    async for session in get_session():
-        # Item prüfen
-        item_obj = await session.scalar(select(Item).where(func.lower(Item.item_tag) == item.lower()))
-        if not item_obj:
-            await interaction.followup.send(
-                embed=discord.Embed(
-                    title="Error!",
-                    description=f"Item **{item}** does not exist.",
-                    color=discord.Color.red()
-                ), ephemeral=True
-            )
-            return
-        item_tag = item_obj.item_tag
-
-        # Player laden oder erstellen
-        player = await session.scalar(
-            select(Player).where(Player.id == user_id, Player.server_id == server_id)
-        )
-        if not player:
-            player = Player(id=user_id, server_id=server_id, money=100.0, debt=0.0, hunger=100, thirst=100, health=100, job=None, created_at=datetime.now())
-            session.add(player)
-            await session.commit()
-
-        if player.money < unit_price * amount:
-            await interaction.followup.send(
-                embed=discord.Embed(
-                    title="Not Enough Money!",
-                    description=f"You are trying to buy **{amount}x {item_tag}** for **${unit_price * amount}**, but you only have **${player.money}**.",
-                    color=discord.Color.red()
-                ), ephemeral=True
-            )
-            return
-
-        # Bestehende BuyOrder checken
-        now = datetime.now()
-        expires_at = now + BUY_ORDER_DURATION
-
-        existing_order = await session.scalar(
-            select(BuyOrder).where(
-                BuyOrder.user_id == user_id,
-                BuyOrder.item_tag == item_tag,
-                BuyOrder.server_id == server_id,
-                BuyOrder.unit_price == unit_price,
-                BuyOrder.is_company == False,
-            )
-        )
-
-        if existing_order:
-            existing_order.amount += amount
-            existing_order.expires_at = expires_at
-            await session.commit()
-
-            await interaction.followup.send(
-                embed=discord.Embed(
-                    title="Buy Order Merged",
-                    description=(
-                        f"Merged your buy orders for **{item_tag}** at **${unit_price}**.\n"
-                        f"New total: **{existing_order.amount}x {item_tag}** = **${existing_order.amount * unit_price}**."
-                    ),
-                    color=discord.Color.green()
-                )
-            )
-            return
-
-        # Markt initialisieren, falls nötig
-        market_entry = await session.scalar(
-            select(MarketItem).where(MarketItem.item_tag == item_tag, MarketItem.server_id == server_id)
-        )
-        if not market_entry:
-            await initialize_market_for_server(server_id)
-            market_entry = await session.scalar(
-                select(MarketItem).where(MarketItem.item_tag == item_tag, MarketItem.server_id == server_id)
-            )
-
-        # SELL-Orders finden
-        fulfilled_total = 0
-        total_spent = 0.0
-
-        sell_orders = (await session.execute(
-            select(SellOrder).where(
-                SellOrder.item_tag == item_tag,
-                SellOrder.server_id == server_id,
-                SellOrder.unit_price <= unit_price,
-                SellOrder.expires_at > now
-            ).order_by(SellOrder.unit_price.asc())
-        )).scalars().all()
-
-        for sell_order in sell_orders:
-            if player.money < sell_order.unit_price:
-                break
-
-            match_amount = min(amount, sell_order.amount)
-            total_price = round(match_amount * sell_order.unit_price, 2)
-
-            if player.money < total_price:
-                match_amount = int(player.money // sell_order.unit_price)
-                total_price = round(match_amount * sell_order.unit_price, 2)
-
-            if match_amount <= 0:
-                break
-
-            # Geld abziehen
-            player.money -= total_price
-            await add_item(user_id, server_id, item_tag, match_amount)
-
-            if sell_order.is_company:
-                company = await session.scalar(
-                    select(Company).where(
-                        Company.entrepreneur_id == sell_order.user_id,
-                        Company.server_id == server_id
-                    )
-                )
-                if company:
-                    company.capital += total_price
-                    await add_owed_taxes(user_id=company.entrepreneur_id, server_id=server_id,
-                                         amount=total_price, is_company=True)
-                else:
-                    await session.delete(sell_order)
-                    await session.commit()
-                    await interaction.followup.send(
-                        embed=discord.Embed(
-                            title="Sell Order Removed",
-                            description="The company for one of the sell orders no longer exists. Sell order removed.",
-                            color=discord.Color.orange()
-                        )
-                    )
-                    continue
-            else:
-                seller = await session.scalar(
-                    select(Player).where(Player.id == sell_order.user_id, Player.server_id == server_id)
-                )
-                if seller:
-                    seller.money += total_price
-                    await add_owed_taxes(user_id=seller.id, server_id=server_id,
-                                         amount=total_price, is_company=False)
-                    try:
-                        user_obj = await interaction.client.fetch_user(sell_order.user_id)
-                        await user_obj.send(embed=discord.Embed(
-                            title="Sell Order Fulfilled",
-                            description=f"Your sell order for **{match_amount}x {item_tag}** was fulfilled for **${total_price:.2f}**.",
-                            color=discord.Color.green()
-                        ))
-                    except discord.Forbidden:
-                        pass
-
-            if sell_order.amount == match_amount:
-                await session.delete(sell_order)
-            else:
-                sell_order.amount -= match_amount
-
-            fulfilled_total += match_amount
-            total_spent += total_price
-            amount -= match_amount
-
-            await session.commit()
-
-
-
-            if amount == 0:
-                await interaction.followup.send(
-                    embed=discord.Embed(
-                        title="Buy Order Fulfilled",
-                        description=f"You bought **{fulfilled_total}x {item_tag}** from player orders for **${total_spent:.2f}**.",
-                        color=discord.Color.green()
-                    )
-                )
-                return
-
-        if fulfilled_total > 0:
-            await interaction.followup.send(
-                embed=discord.Embed(
-                    title="Buy Order Partially Fulfilled",
-                    description=f"You bought **{fulfilled_total}x {item_tag}** from player orders for **${total_spent:.2f}**.",
-                    color=discord.Color.green()
-                )
-            )
-
-        # NPC-Markt?
-        if amount > 0 and unit_price >= market_entry.max_price and market_entry.stockpile > 0:
-            print("    Trying to buy from NPC market")
-            purchasable_amount = min(market_entry.stockpile, amount)
-            total_price = round(purchasable_amount * market_entry.max_price, 2)
-
-            if player.money < total_price:
-                await interaction.user.send(
-                    embed=discord.Embed(
-                        title="Buy Order Cancelled",
-                        description=(
-                            f"Insufficient funds to fulfill the rest of the order from the NPC market.\n"
-                            f"Required: **${total_price}**, Available: **${player.money}**"
-                        ),
-                        color=discord.Color.red()
-                    )
-                )
-                await interaction.followup.send(
-                    embed=discord.Embed(
-                        title="Order Cancelled",
-                        description="You didn't have enough money for the NPC purchase. Check DMs.",
-                        color=discord.Color.red()
-                    ), ephemeral=True
-                )
-                await session.commit()
-                return
-
-            player.money -= total_price
-            await add_item(user_id, server_id, item_tag, purchasable_amount)
-            market_entry.stockpile -= purchasable_amount
-
-
-
-            await session.commit()
-
-            await interaction.followup.send(
-                embed=discord.Embed(
-                    title="NPC Market Purchase",
-                    description=f"You bought **{purchasable_amount}x {item_tag}** from the NPC market for **${market_entry.max_price:.2f}** each. Total: **${total_price:.2f}**.",
-                    color=discord.Color.green()
-                )
-            )
-
-            # Preis anpassen
-            factor = 1 + 0.005 * purchasable_amount
-            market_entry.min_price = round(market_entry.min_price * factor, 2)
-            market_entry.max_price = round(market_entry.max_price * factor, 2)
-            return
-
-        # Nicht vollständig erfüllt → neue BuyOrder anlegen
-        if amount > 0:
-            new_order = BuyOrder(
-                user_id=user_id,
-                item_tag=item_tag,
-                server_id=server_id,
-                amount=amount,
-                unit_price=unit_price,
-                expires_at=expires_at,
-                is_company=False
-            )
-            session.add(new_order)
-            await session.commit()
-
-            await interaction.followup.send(
-                embed=discord.Embed(
-                    title="Buy Order Placed",
-                    description=f"A buy order for **{amount}x {item_tag}** at **${unit_price:.2f}** has been created.",
-                    color=discord.Color.green()
-                )
-            )
-
-
-
-
-
-
-
-
-
+    amount: int = 1):
+    await buy(interaction, item, unit_price, amount)
 
 
 @client.tree.command(
@@ -1294,318 +169,12 @@ async def buy(
     unit_price="Price you're selling for per unit",
     amount="How many you want to sell (default: 1)"
 )
-async def sell(
+async def init_sell(
     interaction: discord.Interaction,
     item: str,
     unit_price: float,
-    amount: int = 1
-):
-    await interaction.response.defer(thinking=True)
-    print(f"{interaction.user}: /sell item:{item}, unit_price:{unit_price}, amount:{amount}")
-
-    if amount <= 0 or unit_price <= 0:
-        await interaction.followup.send(
-            embed=discord.Embed(
-                title="Error!",
-                description="Amount and unit price must be greater than 0.",
-                color=discord.Color.red()
-            ), ephemeral=True
-        )
-        return
-
-    user_id = int(interaction.user.id)
-    server_id = int(interaction.guild.id)
-
-    async for session in get_session():
-        now = datetime.now()
-        expires_at = now + SELL_ORDER_DURATION
-
-        # Item prüfen
-        item_obj = await session.scalar(select(Item).where(func.lower(Item.item_tag) == item.lower()))
-        if not item_obj:
-            await interaction.followup.send(
-                embed=discord.Embed(
-                    title="Error!",
-                    description=f"Item **{item}** does not exist.",
-                    color=discord.Color.red()
-                ), ephemeral=True
-            )
-            return
-        item_tag = item_obj.item_tag
-
-        # Player prüfen
-        player = await session.scalar(
-            select(Player).where(Player.id == user_id, Player.server_id == server_id)
-        )
-        if not player:
-            player = Player(id=user_id, server_id=server_id, money=100.0, debt=0.0, hunger=100, thirst=100, health=100, job=None, created_at=datetime.now())
-            session.add(player)
-            await session.commit()
-
-        # Inventar prüfen
-        inv_item = await session.scalar(
-            select(PlayerItem).where(
-                PlayerItem.user_id == user_id,
-                PlayerItem.server_id == server_id,
-                PlayerItem.item_tag == item_tag
-            )
-        )
-        if not inv_item or inv_item.amount < amount:
-            await interaction.followup.send(
-                embed=discord.Embed(
-                    title="Error!",
-                    description=f"You don't have enough **{item_tag}**.",
-                    color=discord.Color.red()
-                ), ephemeral=True
-            )
-            return
-
-        # Bestehende SellOrder checken
-        now = datetime.now()
-        expires_at = now + SELL_ORDER_DURATION
-
-        existing_order = await session.scalar(
-            select(SellOrder).where(
-                SellOrder.user_id == user_id,
-                SellOrder.item_tag == item_tag,
-                SellOrder.server_id == server_id,
-                SellOrder.unit_price == unit_price,
-                SellOrder.is_company == False,
-            )
-        )
-
-        if existing_order:
-            existing_order.amount += amount
-            existing_order.expires_at = expires_at
-            await session.commit()
-
-            await interaction.followup.send(
-                embed=discord.Embed(
-                    title="Sell Order Merged",
-                    description=(
-                        f"Merged your sell orders for **{item_tag}** at **${unit_price}**.\n"
-                        f"New total: **{existing_order.amount}x {item_tag}** = **${existing_order.amount * unit_price}**."
-                    ),
-                    color=discord.Color.green()
-                )
-            )
-            return
-
-        # Abziehen
-        inv_item.amount -= amount
-        if inv_item.amount <= 0:
-            await session.delete(inv_item)
-
-        await session.commit()
-
-        # Buy Orders abrufen
-        buy_orders = (await session.execute(
-            select(BuyOrder).where(
-                BuyOrder.item_tag == item_tag,
-                BuyOrder.server_id == server_id,
-                BuyOrder.unit_price >= unit_price,
-                BuyOrder.expires_at > now
-            ).order_by(BuyOrder.unit_price.desc())
-        )).scalars().all()
-
-        total_sold = 0
-        total_earned = 0.0
-
-        for buy_order in buy_orders:
-            if total_sold >= amount:
-                break
-
-            buyer_money = None
-            company = None
-
-            if buy_order.is_company:
-                company = await session.scalar(
-                    select(Company).where(
-                        Company.entrepreneur_id == buy_order.user_id,
-                        Company.server_id == server_id
-                    )
-                )
-                if not company:
-                    await session.delete(buy_order)
-                    continue
-                buyer_money = company.capital
-            else:
-                buyer = await session.scalar(
-                    select(Player).where(
-                        Player.id == buy_order.user_id,
-                        Player.server_id == server_id
-                    )
-                )
-                if not buyer:
-                    continue
-                buyer_money = buyer.money
-
-            if buyer_money < unit_price:
-                continue
-
-            sell_qty = min(buy_order.amount, amount - total_sold)
-            total_price = round(sell_qty * unit_price, 2)
-
-            if buyer_money < total_price:
-                sell_qty = int(buyer_money // unit_price)
-                total_price = round(sell_qty * unit_price, 2)
-
-            if sell_qty <= 0:
-                continue
-
-            # Validierung + Transaktion
-            if buy_order.is_company:
-                company_result = await session.execute(
-                    select(Company).where(
-                        Company.entrepreneur_id == buy_order.user_id,
-                        Company.server_id == server_id
-                    )
-                )
-                company = company_result.scalar_one_or_none()
-
-                if not company:
-                    # Firma existiert nicht mehr → Order löschen, Verkauf überspringen
-                    await session.delete(buy_order)
-                    continue
-
-                if company.capital < total_price:
-                    continue  # Firma hat nicht genug Geld → überspringen
-
-                # Transaktion Firma → Verkäufer
-                company.capital -= total_price
-                player.money += total_price
-                await add_owed_taxes(user_id=player.id, server_id=server_id,
-                                     amount=total_price, is_company=False)
-                await add_item(buy_order.user_id, server_id, item_tag, sell_qty, is_company=True)
-
-            else:
-                # Käufer prüfen
-                buyer_result = await session.execute(
-                    select(Player).where(
-                        Player.id == buy_order.user_id,
-                        Player.server_id == server_id
-                    )
-                )
-                buyer = buyer_result.scalar_one_or_none()
-                if not buyer or buyer.money < total_price:
-                    continue
-
-                # Transaktion Käufer → Verkäufer
-                buyer.money -= total_price
-                player.money += total_price
-                await add_owed_taxes(user_id=player.id, server_id=server_id,
-                                     amount=total_price, is_company=False)
-                await add_item(buy_order.user_id, server_id, item_tag, sell_qty)
-
-            # Buy Order anpassen oder löschen
-            buy_order.amount -= sell_qty
-            if buy_order.amount <= 0:
-                await session.delete(buy_order)
-
-            total_sold += sell_qty
-            total_earned += total_price
-
-            embed = discord.Embed(
-                title="Buy Order Fulfilled",
-                description=f"Your buy order of **{sell_qty}x {item_tag}** at **${unit_price:.2f}** each was successful (Total: **${total_price:.2f}**).",
-                color=discord.Color.green()
-            )
-            try:
-                buyer_user = await interaction.client.fetch_user(buy_order.user_id)
-                await buyer_user.send(embed=embed)
-            except discord.Forbidden:
-                pass
-
-        # NPC-Markt
-        if total_sold < amount:
-            remaining = amount - total_sold
-            market_entry = await session.scalar(
-                select(MarketItem).where(
-                    MarketItem.item_tag == item_tag,
-                    MarketItem.server_id == server_id
-                )
-            )
-            if not market_entry:
-                await initialize_market_for_server(server_id)
-                market_entry = await session.scalar(
-                    select(MarketItem).where(
-                        MarketItem.item_tag == item_tag,
-                        MarketItem.server_id == server_id
-                    )
-                )
-
-            if unit_price <= market_entry.min_price and market_entry.stockpile >= remaining:
-                npc_sell_qty = remaining
-                price = market_entry.min_price
-                total_price = round(npc_sell_qty * price, 2)
-
-                player.money += total_price
-                market_entry.stockpile += npc_sell_qty
-                await add_owed_taxes(user_id=player.id, server_id=server_id,
-                                     amount=total_price, is_company=False)
-
-
-
-                total_sold += npc_sell_qty
-                total_earned += total_price
-
-                await interaction.followup.send(
-                    embed=discord.Embed(
-                        title="NPC Market Sale",
-                        description=(f"You sold **{npc_sell_qty}x {item_tag}** to the NPC market for **${price:.2f}** each (Total: **${total_price:.2f}**)."),
-                        color=discord.Color.green()
-                    )
-                )
-
-                # Preis leicht senken
-                factor = 1 - (0.005 * npc_sell_qty)
-                market_entry.max_price = round(market_entry.max_price * factor, 2)
-                market_entry.min_price = round(market_entry.min_price * factor, 2)
-
-
-
-                await session.commit()
-                return
-
-        if total_sold < amount:
-            rest = amount - total_sold
-            new_order = SellOrder(
-                user_id=user_id,
-                item_tag=item_tag,
-                server_id=server_id,
-                amount=rest,
-                unit_price=unit_price,
-                expires_at=expires_at,
-                is_company=False
-            )
-            session.add(new_order)
-            await interaction.followup.send(
-                embed=discord.Embed(
-                    title="Sell Order Placed",
-                    description=f"Your sell order for **{rest}x {item_tag}** at **${unit_price:.2f}** has been created.",
-                    color=discord.Color.green()
-                )
-            )
-
-        if total_sold > 0:
-            await interaction.followup.send(
-                embed=discord.Embed(
-                    title="Player Market Sale",
-                    description=f"You sold **{total_sold}x {item_tag}** for **${total_earned:.2f}** total.",
-                    color=discord.Color.green()
-                )
-            )
-
-        await session.commit()
-
-
-
-
-
-
-
-
-
+    amount: int = 1):
+    await sell(interaction, item, unit_price, amount)
 
 # CommandGroup Definition
 class OrderCommandGroup(app_commands.Group):
@@ -1614,160 +183,16 @@ class OrderCommandGroup(app_commands.Group):
 
     @app_commands.command(name="view", description="View buy and sell orders")
     @app_commands.describe(user="(Optional) View orders of another user")
-    async def view(self, interaction: discord.Interaction, user: discord.User | None = None):
-        await interaction.response.defer(thinking=True)
-        print(f"{interaction.user}: /order view user:{user}")
-
-        target_user = user or interaction.user
-        user_id = int(target_user.id)
-        server_id = int(interaction.guild.id)
-        now = datetime.now()
-
-        async for session in get_session():
-            buy_orders = (await session.execute(
-                select(BuyOrder).where(
-                    BuyOrder.user_id == user_id,
-                    BuyOrder.server_id == server_id,
-                    BuyOrder.expires_at > now
-                ).order_by(BuyOrder.item_tag, BuyOrder.unit_price)
-            )).scalars().all()
-
-            sell_orders = (await session.execute(
-                select(SellOrder).where(
-                    SellOrder.user_id == user_id,
-                    SellOrder.server_id == server_id,
-                    SellOrder.expires_at > now
-                ).order_by(SellOrder.item_tag, SellOrder.unit_price)
-            )).scalars().all()
-
-            embed = discord.Embed(
-                title=f"{target_user.display_name}'s Active Orders",
-                color=discord.Color.yellow()
-            )
-
-            if buy_orders:
-                embed.add_field(
-                    name="Buy Orders",
-                    value="\n".join([
-                        f"{'🏭 ' if o.is_company else ''}"
-                        f"{o.amount}x {o.item_tag} @ ${o.unit_price:.2f} "
-                        f"(expires <t:{int(o.expires_at.timestamp())}:R>)"
-                        for o in buy_orders
-                    ]),
-                    inline=False
-                )
-            else:
-                embed.add_field(name="Buy Orders", value="None", inline=False)
-
-            if sell_orders:
-                embed.add_field(
-                    name="Sell Orders",
-                    value="\n".join([
-                        f"{'🏭 ' if o.is_company else ''}"
-                        f"{o.amount}x {o.item_tag} @ ${o.unit_price:.2f} "
-                        f"(expires <t:{int(o.expires_at.timestamp())}:R>)"
-                        for o in sell_orders
-                    ]),
-                    inline=False
-                )
-            else:
-                embed.add_field(name="Sell Orders", value="None", inline=False)
-
-            await interaction.followup.send(embed=embed, ephemeral=(user is None))
+    async def init_view(self, interaction: discord.Interaction, user: discord.User | None = None):
+        await order_view(interaction, user)
 
     @app_commands.command(name="remove", description="Remove one or multiple orders")
     @app_commands.describe(
         item_tag="The item tag of the order(s) to remove",
         price="(Optional) Only remove order at this exact price"
     )
-    async def remove(self, interaction: discord.Interaction, item_tag: str, price: float | None = None):
-        await interaction.response.defer(thinking=True)
-        print(f"{interaction.user}: /order remove item_tag:{item_tag}, price:{price}")
-
-        user_id = int(interaction.user.id)
-        server_id = int(interaction.guild.id)
-
-        async for session in get_session():
-            # Erst alle passenden SellOrders laden
-            sell_orders = (await session.execute(
-                select(SellOrder).where(
-                    SellOrder.user_id == user_id,
-                    SellOrder.server_id == server_id,
-                    SellOrder.item_tag == item_tag,
-                    SellOrder.unit_price == price if price is not None else True
-                )
-            )).scalars().all()
-
-            # Items zurückgeben
-            total_returned = 0
-            for order in sell_orders:
-                if order.is_company:
-                    # Gib Items der Firma zurück
-                    company = await session.scalar(select(Company).where(
-                        Company.entrepreneur_id == user_id,
-                        Company.server_id == server_id
-                    ))
-                    if company:
-                        await add_item(
-                            user_id=user_id,
-                            server_id=server_id,
-                            item_tag=item_tag,
-                            amount=order.amount,
-                            is_company=True
-                        )
-                else:
-                    # Gib Items dem Spieler zurück
-                    await add_item(
-                        user_id=user_id,
-                        server_id=server_id,
-                        item_tag=item_tag,
-                        amount=order.amount,
-                        is_company=False
-                    )
-                total_returned += order.amount
-
-            # Dann alle passenden BuyOrders löschen
-            deleted_buy = await session.execute(
-                delete(BuyOrder)
-                .where(
-                    BuyOrder.user_id == user_id,
-                    BuyOrder.server_id == server_id,
-                    BuyOrder.item_tag == item_tag,
-                    BuyOrder.unit_price == price if price is not None else True
-                )
-            )
-
-            # Und alle passenden SellOrders löschen
-            deleted_sell = await session.execute(
-                delete(SellOrder)
-                .where(
-                    SellOrder.user_id == user_id,
-                    SellOrder.server_id == server_id,
-                    SellOrder.item_tag == item_tag,
-                    SellOrder.unit_price == price if price is not None else True
-                )
-            )
-
-            await session.commit()
-
-            if deleted_buy.rowcount == 0 and deleted_sell.rowcount == 0:
-                await interaction.followup.send(
-                    embed=discord.Embed(
-                        title="Error!",
-                        description=f"No matching orders found for `{item_tag}`{' at $' + str(price) if price else ''}.",
-                        color=discord.Color.red()
-                    )
-                )
-            else:
-                await interaction.followup.send(
-                    embed=discord.Embed(
-                        title="Orders Removed",
-                        description=f"Deleted **{deleted_buy.rowcount}** buy order(s) and **{deleted_sell.rowcount}** sell order(s) for `{item_tag}`{' at $' + str(price) if price else ''}.\n"
-                                    f"Returned **{total_returned}x {item_tag}** to your inventory.",
-                        color=discord.Color.green()
-                    )
-                )
-
+    async def init_remove(self, interaction: discord.Interaction, item_tag: str, price: float | None = None):
+        await order_remove(interaction, item_tag, price)
 
 class CompanyGroup(app_commands.Group):
     def __init__(self):
@@ -1818,7 +243,7 @@ class CompanyGroup(app_commands.Group):
         async for session in get_session():
 
             # Item prüfen
-            item_obj = await session.scalar(select(Item).where(func.lower(Item.item_tag) == item.lower()))
+            item_obj = await get_item(item)
             if not item_obj:
                 await interaction.followup.send(
                     embed=discord.Embed(
@@ -1831,9 +256,7 @@ class CompanyGroup(app_commands.Group):
             item_tag = item_obj.item_tag
 
             # Company prüfen
-            company = await session.scalar(
-                select(Company).where(Company.entrepreneur_id == user_id, Company.server_id == server_id)
-            )
+            company = await get_company(user_id, server_id)
             if not company:
                 await interaction.followup.send(
                     embed=discord.Embed(
@@ -1845,13 +268,7 @@ class CompanyGroup(app_commands.Group):
                 return
 
             # Inventar prüfen
-            inv_item = await session.scalar(
-                select(CompanyItem).where(
-                    CompanyItem.company_entrepreneur_id == user_id,
-                    CompanyItem.server_id == server_id,
-                    CompanyItem.item_tag == item_tag
-                )
-            )
+            inv_item = await get_company_inventory(user_id, server_id)
             if not inv_item or inv_item.amount < amount:
                 await interaction.followup.send(
                     embed=discord.Embed(
@@ -1862,10 +279,7 @@ class CompanyGroup(app_commands.Group):
                 )
                 return
 
-            result = await session.execute(
-                select(Player).where(Player.id == user_id, Player.server_id == server_id)
-            )
-            player = result.scalar_one_or_none()
+            player = await get_player(user_id, server_id)
             if not player or player.job != "Entrepreneur":
                 embed = discord.Embed(
                     title="Error!",
@@ -1907,8 +321,9 @@ class CompanyGroup(app_commands.Group):
 
             # Abziehen
             inv_item.amount -= amount
+            update_company_item(inv_item)
             if inv_item.amount <= 0:
-                await session.delete(inv_item)
+                await delete_company_item(inv_item)
 
             # Update hunger/thirst/cooldown
             old_hunger = player.hunger
@@ -1916,27 +331,19 @@ class CompanyGroup(app_commands.Group):
             player.hunger = max(0, player.hunger - amount * get_hunger_depletion())
             player.thirst = max(0, player.thirst - amount * get_thirst_depletion())
             player.work_cooldown_until = now + WORK_COOLDOWN
-            await session.commit()
+            await update_player(player)
 
             # Bestehende SellOrder checken
             now = datetime.now()
             expires_at = now + BUY_ORDER_DURATION
 
-            existing_order = await session.scalar(
-                select(SellOrder).where(
-                    SellOrder.user_id == user_id,
-                    SellOrder.item_tag == item_tag,
-                    SellOrder.server_id == server_id,
-                    SellOrder.unit_price == unit_price,
-                    SellOrder.is_company == True
-                )
-            )
+            existing_order = await get_own_sell_orders(user_id, server_id, item_tag, unit_price, now, is_company=True)
 
             if existing_order:
                 print("Merging orders")
                 existing_order.amount += amount
                 existing_order.expires_at = expires_at
-                await session.commit()
+                await update_sell_order(existing_order)
                 embed = discord.Embed(
                     title="Company Sell Order Merged",
                     description=(
@@ -1951,35 +358,16 @@ class CompanyGroup(app_commands.Group):
                 return
 
 
-            # Abziehen
-            inv_item.amount -= amount
-            if inv_item.amount <= 0:
-                await session.delete(inv_item)
 
             # Buy Orders abrufen
-            buy_orders = (await session.execute(
-                select(BuyOrder).where(
-                    BuyOrder.item_tag == item_tag,
-                    BuyOrder.server_id == server_id,
-                    BuyOrder.unit_price >= unit_price,
-                    BuyOrder.expires_at > now
-                ).order_by(BuyOrder.unit_price.desc())
-            )).scalars().all()
+            buy_orders = await get_buy_orders(server_id, item_tag, unit_price, now)
 
             total_sold = 0
             total_earned = 0.0
 
-
-
-
-
-
             for buy_order in buy_orders:
                 if total_sold >= amount:
                     break
-
-                buyer_money = None
-                company_seller = None
 
 
                 sell_qty = min(buy_order.amount, amount - total_sold)
@@ -1987,17 +375,11 @@ class CompanyGroup(app_commands.Group):
 
                 # Validierung + Transaktion
                 if buy_order.is_company:
-                    company_result = await session.execute(
-                        select(Company).where(
-                            Company.entrepreneur_id == buy_order.user_id,
-                            Company.server_id == server_id
-                        )
-                    )
-                    company_buyer = company_result.scalar_one_or_none()
+                    company_buyer = await get_company(buy_order.user_id, server_id)
 
                     if not company_buyer:
                         # Firma existiert nicht mehr → Order löschen, Verkauf überspringen
-                        await session.delete(buy_order)
+                        await delete_buy_order(buy_order)
                         continue
 
                     if company_buyer.capital < total_price:
@@ -2006,19 +388,12 @@ class CompanyGroup(app_commands.Group):
                     # Transaktion Firma → Verkäufer
                     company_buyer.capital -= total_price
                     company.capital += total_price
-                    await add_owed_taxes(user_id=company.entrepreneur_id, server_id=server_id,
+                    await add_owed_taxes(session, user_id=company.entrepreneur_id, server_id=server_id,
                                          amount=total_price, is_company=True)
-                    await add_item(buy_order.user_id, server_id, item_tag, sell_qty, True)
+                    await add_company_item(session, buy_order.user_id, server_id, item_tag, sell_qty, True)
 
                 else:
-                    # Käufer prüfen
-                    buyer_result = await session.execute(
-                        select(Player).where(
-                            Player.id == buy_order.user_id,
-                            Player.server_id == server_id
-                        )
-                    )
-                    buyer = buyer_result.scalar_one_or_none()
+                    buyer = await get_player(buy_order.user_id, server_id)
                     if not buyer or buyer.money < total_price:
                         continue
 
@@ -2034,9 +409,9 @@ class CompanyGroup(app_commands.Group):
                     # Transaktion Käufer → Verkäufer
                     buyer.money -= total_price
                     company.capital += total_price
-                    await add_owed_taxes(user_id=company.entrepreneur_id, server_id=server_id,
+                    await add_owed_taxes(session, user_id=company.entrepreneur_id, server_id=server_id,
                                          amount=total_price, is_company=True)
-                    await add_item(buy_order.user_id, server_id, item_tag, sell_qty)
+                    await add_player_item(session, buy_order.user_id, server_id, item_tag, sell_qty)
 
                 # Buy Order anpassen oder löschen
                 buy_order.amount -= sell_qty
@@ -2060,20 +435,18 @@ class CompanyGroup(app_commands.Group):
             # NPC-Markt
             if total_sold < amount:
                 remaining = amount - total_sold
-                market_entry = await session.scalar(
-                    select(MarketItem).where(
-                        MarketItem.item_tag == item_tag,
-                        MarketItem.server_id == server_id
-                    )
-                )
+                # Markt initialisieren, falls nötig
+                market_entry = await get_market_item(server_id, item_tag)
                 if not market_entry:
-                    await initialize_market_for_server(server_id)
-                    market_entry = await session.scalar(
-                        select(MarketItem).where(
-                            MarketItem.item_tag == item_tag,
-                            MarketItem.server_id == server_id
-                        )
-                    )
+                    items = await get_all_items(session)
+
+                    for item in items:
+                        market_item = get_default_market_item(item, server_id)
+                        session.add(market_item)
+
+                    await session.commit()
+
+                market_entry = await get_market_item(server_id, item_tag)
 
                 if unit_price <= market_entry.min_price and market_entry.stockpile >= remaining:
                     npc_sell_qty = remaining
@@ -2082,7 +455,7 @@ class CompanyGroup(app_commands.Group):
 
                     company.capital += total_price
                     market_entry.stockpile += npc_sell_qty
-                    await add_owed_taxes(user_id=company.entrepreneur_id, server_id=server_id,
+                    await add_owed_taxes(session, user_id=company.entrepreneur_id, server_id=server_id,
                                          amount=total_price, is_company=True)
 
                     total_sold += npc_sell_qty
@@ -2170,7 +543,7 @@ class CompanyGroup(app_commands.Group):
         async for session in get_session():
             try:
                 # Item prüfen
-                item_obj = await session.scalar(select(Item).where(func.lower(Item.item_tag) == item.lower()))
+                item_obj = await get_item(item)
                 if not item_obj:
                     await interaction.followup.send(
                         embed=discord.Embed(
@@ -2183,9 +556,7 @@ class CompanyGroup(app_commands.Group):
                 item_tag = item_obj.item_tag
 
                 # Company laden
-                company = await session.scalar(
-                    select(Company).where(Company.entrepreneur_id == user_id, Company.server_id == server_id)
-                )
+                company = await get_company(user_id, server_id)
                 if not company:
                     await interaction.followup.send(
                         embed=discord.Embed(
@@ -2210,15 +581,7 @@ class CompanyGroup(app_commands.Group):
                 now = datetime.now()
                 expires_at = now + BUY_ORDER_DURATION
 
-                existing_order = await session.scalar(
-                    select(BuyOrder).where(
-                        BuyOrder.user_id == user_id,
-                        BuyOrder.item_tag == item_tag,
-                        BuyOrder.server_id == server_id,
-                        BuyOrder.unit_price == unit_price,
-                        BuyOrder.is_company == True
-                    )
-                )
+                existing_order = await get_own_buy_orders(user_id, server_id, item_tag, unit_price, expires_at, is_company=True)
 
                 if existing_order:
                     existing_order.amount += amount
@@ -2238,27 +601,23 @@ class CompanyGroup(app_commands.Group):
                     return
 
                 # Markt initialisieren, falls nötig
-                market_entry = await session.scalar(
-                    select(MarketItem).where(MarketItem.item_tag == item_tag, MarketItem.server_id == server_id)
-                )
+                market_entry = await get_market_item(server_id, item_tag)
                 if not market_entry:
-                    await initialize_market_for_server(server_id)
-                    market_entry = await session.scalar(
-                        select(MarketItem).where(MarketItem.item_tag == item_tag, MarketItem.server_id == server_id)
-                    )
+                    items = await get_all_items(session)
+
+                    for item in items:
+                        market_item = get_default_market_item(item, server_id)
+                        session.add(market_item)
+
+                    await session.commit()
+
+                market_entry = await get_market_item(server_id, item_tag)
 
                 # SELL-Orders finden
                 fulfilled_total = 0
                 total_spent = 0.0
 
-                sell_orders = (await session.execute(
-                    select(SellOrder).where(
-                        SellOrder.item_tag == item_tag,
-                        SellOrder.server_id == server_id,
-                        SellOrder.unit_price <= unit_price,
-                        SellOrder.expires_at > now
-                    ).order_by(SellOrder.unit_price.asc())
-                )).scalars().all()
+                sell_orders = await get_sell_orders(server_id, item_tag, unit_price, now)
 
                 for sell_order in sell_orders:
                     if company.capital < sell_order.unit_price:
@@ -2276,18 +635,13 @@ class CompanyGroup(app_commands.Group):
 
                     # Geld abziehen
                     company.capital -= total_price
-                    await add_item(user_id, server_id, item_tag, match_amount, True)
+                    await add_company_item(session, user_id, server_id, item_tag, match_amount)
 
                     if sell_order.is_company:
-                        company_seller = await session.scalar(
-                            select(Company).where(
-                                Company.entrepreneur_id == sell_order.user_id,
-                                Company.server_id == server_id
-                            )
-                        )
+                        company_seller = await get_company()
                         if company_seller:
                             company_seller.capital += total_price
-                            await add_owed_taxes(user_id=company_seller.entrepreneur_id, server_id=server_id, amount=total_price, is_company=True)
+                            await add_owed_taxes(session, user_id=company_seller.entrepreneur_id, server_id=server_id, amount=total_price, is_company=True)
 
                         else:
                             await session.delete(sell_order)
@@ -2301,12 +655,10 @@ class CompanyGroup(app_commands.Group):
                             )
                             continue
                     else:
-                        seller = await session.scalar(
-                            select(Player).where(Player.id == sell_order.user_id, Player.server_id == server_id)
-                        )
+                        seller = await get_player(sell_order.user_id, server_id)
                         if seller:
                             seller.money += total_price
-                            await add_owed_taxes(user_id=seller.id, server_id=server_id,
+                            await add_owed_taxes(session, user_id=seller.id, server_id=server_id,
                                                  amount=total_price, is_company=False)
                             try:
                                 user_obj = await interaction.client.fetch_user(sell_order.user_id)
@@ -2375,7 +727,7 @@ class CompanyGroup(app_commands.Group):
                         return
 
                     company.capital -= total_price
-                    await add_item(user_id, server_id, item_tag, purchasable_amount, is_company=True)
+                    await add_company_item(session, user_id, server_id, item_tag, purchasable_amount)
                     market_entry.stockpile -= purchasable_amount
 
 
@@ -2442,21 +794,11 @@ class CompanyGroup(app_commands.Group):
 
         async for session in get_session():
             # Primär: Firma direkt durch Eigentum suchen
-            company = await session.scalar(
-                select(Company).where(
-                    Company.entrepreneur_id == user_id,
-                    Company.server_id == server_id
-                )
-            )
+            company = await get_company(user_id, server_id)
 
             if not company:
                 # Sekundär: prüfen, ob Spieler Arbeiter einer Firma ist
-                player = await session.scalar(
-                    select(Player).where(
-                        Player.id == user_id,
-                        Player.server_id == server_id
-                    )
-                )
+                player = await get_player(user_id, server_id)
 
                 if not player or player.company_entrepreneur_id is None:
                     await interaction.followup.send(
@@ -2469,12 +811,7 @@ class CompanyGroup(app_commands.Group):
                     return
 
                 # Firma über Arbeitgeber-ID laden
-                company = await session.scalar(
-                    select(Company).where(
-                        Company.entrepreneur_id == player.company_entrepreneur_id,
-                        Company.server_id == server_id
-                    )
-                )
+                company = await get_company(player.company_entrepreneur_id, server_id)
 
                 if not company:
                     await interaction.followup.send(
@@ -2504,13 +841,7 @@ class CompanyGroup(app_commands.Group):
             embed.set_footer(text=f"Entrepreneur: {target_user.name}")
 
             # Company-Mitarbeiter abfragen
-            result_players = await session.execute(
-                select(Player).where(
-                    Player.company_entrepreneur_id == company.entrepreneur_id,
-                    Player.server_id == server_id
-                )
-            )
-            players = result_players.scalars().all()
+            players = await get_employees(company.entrepreneur_id, server_id)
 
             if players:
                 employee_lines = []
@@ -2525,13 +856,7 @@ class CompanyGroup(app_commands.Group):
                 embed.add_field(name="Employees", value="None", inline=False)
 
             # Company-Join-Anfragen abfragen
-            result_requests = await session.execute(
-                select(CompanyJoinRequest).where(
-                    CompanyJoinRequest.company_entrepreneur_id == company.entrepreneur_id,
-                    CompanyJoinRequest.server_id == server_id
-                )
-            )
-            requests = result_requests.scalars().all()
+            requests = await get_join_requests(company.entrepreneur_id, server_id)
 
             if requests:
                 request_lines = []
@@ -2545,14 +870,7 @@ class CompanyGroup(app_commands.Group):
             else:
                 embed.add_field(name="Join Requests", value="None", inline=False)
 
-            # Company-Inventar abfragen
-            result_items = await session.execute(
-                select(CompanyItem).where(
-                    CompanyItem.company_entrepreneur_id == company.entrepreneur_id,
-                    CompanyItem.server_id == server_id
-                )
-            )
-            items = result_items.scalars().all()
+            items = await get_company_inventory(session, company.entrepreneur_id, server_id)
 
             if items:
                 inventory_lines = []
@@ -2587,9 +905,7 @@ class CompanyGroup(app_commands.Group):
 
         async for session in get_session():
             # Player prüfen
-            player = await session.scalar(
-                select(Player).where(Player.id == user_id, Player.server_id == server_id)
-            )
+            player = await get_player(user_id, server_id)
             if not player:
                 player = Player(
                     id=user_id,
@@ -2606,12 +922,7 @@ class CompanyGroup(app_commands.Group):
                 await session.commit()
 
             # Firma prüfen
-            company = await session.scalar(
-                select(Company).where(
-                    Company.entrepreneur_id == user_id,
-                    Company.server_id == server_id
-                )
-            )
+            company = await get_company(user_id, server_id)
             if not company:
                 await interaction.followup.send(
                     embed=discord.Embed(
@@ -2667,9 +978,7 @@ class CompanyGroup(app_commands.Group):
 
         async for session in get_session():
             # Player prüfen
-            player = await session.scalar(
-                select(Player).where(Player.id == user_id, Player.server_id == server_id)
-            )
+            player = await get_player(user_id, server_id)
             if not player:
                 player = Player(
                     id=user_id,
@@ -2686,12 +995,7 @@ class CompanyGroup(app_commands.Group):
                 await session.commit()
 
             # Firma prüfen
-            company = await session.scalar(
-                select(Company).where(
-                    Company.entrepreneur_id == user_id,
-                    Company.server_id == server_id
-                )
-            )
+            company = await get_company(user_id, server_id)
             if not company:
                 await interaction.followup.send(
                     embed=discord.Embed(
@@ -2730,7 +1034,7 @@ class CompanyGroup(app_commands.Group):
     @app_commands.command(name="create", description="Create a company if you don't have a job. Costs $1000")
     @app_commands.describe(name="The name of the company you want to create")
     async def create(self, interaction: discord.Interaction, name: str):
-        print(f"{interaction.user}: /company withdraw {name}")
+        print(f"{interaction.user}: /company create {name}")
         await interaction.response.defer(thinking=True)
 
         user_id = int(interaction.user.id)
@@ -2738,9 +1042,7 @@ class CompanyGroup(app_commands.Group):
 
         async for session in get_session():
             # Player laden oder erstellen
-            player = await session.scalar(
-                select(Player).where(Player.id == user_id, Player.server_id == server_id)
-            )
+            player = await get_player(user_id, server_id)
             if not player:
                 player = Player(
                     id=user_id,
@@ -2757,12 +1059,7 @@ class CompanyGroup(app_commands.Group):
                 await session.commit()
 
             # Check: Hat bereits eine Firma?
-            existing = await session.scalar(
-                select(Company).where(
-                    Company.entrepreneur_id == user_id,
-                    Company.server_id == server_id
-                )
-            )
+            existing = await get_company(user_id, server_id)
             if existing:
                 await interaction.followup.send(
                     embed=discord.Embed(
@@ -2838,7 +1135,7 @@ class CompanyGroup(app_commands.Group):
         async for session in get_session():
             # Adminrechte prüfen, wenn Fremdfirma
             if user:
-                gov = await session.scalar(select(Government).where(Government.id == server_id))
+                gov = await get_government(session, server_id)
                 if not gov:
                     gov = Government(
                         id=server_id,
@@ -2864,12 +1161,7 @@ class CompanyGroup(app_commands.Group):
                     return
 
             # Firma prüfen
-            company = await session.scalar(
-                select(Company).where(
-                    Company.entrepreneur_id == target_user_id,
-                    Company.server_id == server_id
-                )
-            )
+            company = await get_company(target_user_id, server_id)
             if not company:
                 await interaction.followup.send(
                     embed=discord.Embed(
@@ -2881,44 +1173,26 @@ class CompanyGroup(app_commands.Group):
                 return
 
             # Player-Objekt holen und Job leeren
-            player = await session.scalar(
-                select(Player).where(
-                    Player.id == target_user_id,
-                    Player.server_id == server_id
-                )
-            )
+            player = await get_player(target_user_id, server_id)
             if player:
                 player.job = ""
 
             player.money += company.capital
 
             # CompanyItems übertragen
-            company_items = (await session.execute(
-                select(CompanyItem).where(
-                    CompanyItem.company_entrepreneur_id == target_user_id,
-                    CompanyItem.server_id == server_id
-                )
-            )).scalars().all()
+            company_items = await get_company_inventory(session, target_user_id, server_id)
 
             for item in company_items:
-                await add_item(
+                await add_player_item(session,
                     user_id=target_user_id,
                     server_id=server_id,
                     item_tag=item.item_tag,
                     amount=item.amount,
-                    is_company=False
                 )
                 await session.delete(item)
 
             # Alle Spieler entkoppeln, die bei der Company angestellt waren
-            await session.execute(
-                update(Player)
-                .where(
-                    Player.company_entrepreneur_id == target_user_id,
-                    Player.server_id == server_id
-                )
-                .values(company_entrepreneur_id=None, job="")
-            )
+            await fire_employees(target_user_id, server_id)
 
             # Firma löschen
             await session.delete(company)
@@ -2952,12 +1226,7 @@ async def setitems(interaction: discord.Interaction, item1: str, item2: str = ""
     server_id = int(interaction.guild.id)
 
     async for session in get_session():
-        company = await session.scalar(
-            select(Company).where(
-                Company.entrepreneur_id == user_id,
-                Company.server_id == server_id
-            )
-        )
+        company = await get_company(user_id, server_id)
 
         if not company:
             await interaction.followup.send(
@@ -2976,8 +1245,7 @@ async def setitems(interaction: discord.Interaction, item1: str, item2: str = ""
                 raw_tags.append(item)
 
 
-        result = await session.execute(select(Item.item_tag).where(Item.producible == True))
-        producible_tags = {row[0] for row in result.all()}
+        producible_tags = set(await get_producible_items())
 
         # Validieren
         valid_tags = []
@@ -3035,7 +1303,7 @@ async def work(interaction: discord.Interaction, item: str):
     server_id = int(interaction.guild.id)
 
     async for session in get_session():
-        player = await session.scalar(select(Player).where(Player.id == user_id, Player.server_id == server_id))
+        player = await get_player(user_id, server_id)
         if not player or not player.job or player.job == "":
             await interaction.followup.send(
                 embed=discord.Embed(title="Not Employed", description="You're not part of any company. Use /join <user-id> to request to join a player's company.", color=discord.Color.red()),
@@ -3050,7 +1318,7 @@ async def work(interaction: discord.Interaction, item: str):
                 ephemeral=True
             )
             return
-        company = await session.scalar(select(Company).where(Company.entrepreneur_id == player.company_entrepreneur_id, Company.server_id == server_id))
+        company = await get_company(player.company_entrepreneur_id, server_id)
         if not company:
             await interaction.followup.send(
                 embed=discord.Embed(title="Company Missing", description="Your company does not exist anymore.", color=discord.Color.red()),
@@ -3078,7 +1346,7 @@ async def work(interaction: discord.Interaction, item: str):
             return
 
         # Werkzeuge prüfen
-        has_tool = await has_item(user_id, server_id, "Tool")
+        has_tool = await has_player_item(session, user_id, server_id, "Tool")
         if not has_tool:
             await interaction.followup.send(embed=discord.Embed(
                 title="Error!",
@@ -3097,11 +1365,11 @@ async def work(interaction: discord.Interaction, item: str):
 
         company.capital -= company.wage
         player.money += company.wage
-        await add_owed_taxes(user_id=player.id, server_id=server_id,
+        await add_owed_taxes(session, user_id=player.id, server_id=server_id,
                              amount=company.wage, is_company=False)
 
 
-        item_obj = await session.scalar(select(Item).where(func.lower(Item.item_tag) == item.lower()))
+        item_obj = await get_item(item)
         if not item_obj or not item_obj.producible:
             await interaction.followup.send(
                 embed=discord.Embed(title="Invalid Item", description=f"The item can't be produced.", color=discord.Color.red()),
@@ -3121,7 +1389,6 @@ async def work(interaction: discord.Interaction, item: str):
             return
 
         item_index = allowed_tags.index(item)
-        item_obj = await session.scalar(select(Item).where(func.lower(Item.item_tag) == item.lower()))
 
         ingredients = {}
         if item_obj.ingredients:
@@ -3132,11 +1399,7 @@ async def work(interaction: discord.Interaction, item: str):
         # Wenn Worksteps = 0, dann Ressourcen prüfen und verbrauchen
         if worksteps_list[item_index] <= 0:
             for tag, required_amount in ingredients.items():
-                company_item = await session.scalar(select(CompanyItem).where(
-                    CompanyItem.company_entrepreneur_id == company.entrepreneur_id,
-                    CompanyItem.server_id == server_id,
-                    CompanyItem.item_tag == tag
-                ))
+                company_item = await get_company_item(session, company.entrepreneur_id, server_id, tag)
                 if not company_item or company_item.amount < required_amount:
                     await interaction.followup.send(embed=discord.Embed(
                         title="Not enough resources!",
@@ -3147,11 +1410,7 @@ async def work(interaction: discord.Interaction, item: str):
 
             # Ressourcen abziehen
             for tag, required_amount in ingredients.items():
-                company_item = await session.scalar(select(CompanyItem).where(
-                    CompanyItem.company_entrepreneur_id == company.entrepreneur_id,
-                    CompanyItem.server_id == server_id,
-                    CompanyItem.item_tag == tag
-                ))
+                company_item = await get_company_item(session, company.entrepreneur_id, server_id, tag)
                 company_item.amount -= required_amount
 
             worksteps_list[item_index] = item_obj.worksteps or 1  # Fallback auf 1
@@ -3161,7 +1420,7 @@ async def work(interaction: discord.Interaction, item: str):
         company.worksteps = ",".join(str(x) for x in worksteps_list)
 
         # Werkzeug-Haltbarkeit reduzieren
-        durability = await use_item(user_id, server_id, "Tool")
+        durability = await use_item(session, user_id, server_id, "Tool")
 
         # Update hunger/thirst/cooldown
         old_hunger = player.hunger
@@ -3176,8 +1435,7 @@ async def work(interaction: discord.Interaction, item: str):
 
         if worksteps_list[item_index] <= 0:
             # Item wurde fertiggestellt
-            await add_item(user_id=company.entrepreneur_id, server_id=server_id, item_tag=item, amount=1,
-                           is_company=True)
+            await add_company_item(user_id=company.entrepreneur_id, server_id=server_id, item_tag=item, amount=1)
             embed.title = "Item Produced!"
             embed.description = f"You produced **1x {item}** for your company."
         else:
@@ -3221,13 +1479,8 @@ async def join(interaction: discord.Interaction, user: discord.Member):
 
     async for session in get_session():
         # Check if requester is already in a company
-        existing_company = await session.scalar(
-            select(Player).where(
-                Player.id == requester_id,
-                Player.company_entrepreneur_id != None
-            )
-        )
-        if existing_company:
+        player = await get_player(requester_id, server_id)
+        if player.company_entrepreneur_id is not None:
             await interaction.followup.send(
                 embed=discord.Embed(
                     title="Error!",
@@ -3238,12 +1491,7 @@ async def join(interaction: discord.Interaction, user: discord.Member):
             return
 
         # Check if target user owns a company
-        company = await session.scalar(
-            select(Company).where(
-                Company.entrepreneur_id == entrepreneur_id,
-                Company.server_id == server_id
-            )
-        )
+        company = await get_company(entrepreneur_id, server_id)
         if not company:
             await interaction.followup.send(
                 embed=discord.Embed(
@@ -3255,13 +1503,7 @@ async def join(interaction: discord.Interaction, user: discord.Member):
             return
 
         # Check for existing join request
-        existing_request = await session.scalar(
-            select(CompanyJoinRequest).where(
-                CompanyJoinRequest.user_id == requester_id,
-                CompanyJoinRequest.server_id == server_id,
-                CompanyJoinRequest.company_entrepreneur_id == entrepreneur_id
-            )
-        )
+        existing_request = await get_user_join_request(session, entrepreneur_id, server_id, requester_id)
         if existing_request:
             await interaction.followup.send(
                 embed=discord.Embed(
@@ -3311,12 +1553,7 @@ async def hire(interaction: discord.Interaction, user: discord.Member):
 
     async for session in get_session():
         # Existiert die Firma?
-        company = await session.scalar(
-            select(Company).where(
-                Company.entrepreneur_id == entrepreneur_id,
-                Company.server_id == server_id
-            )
-        )
+        company = await get_company(entrepreneur_id, server_id)
         if not company:
             await interaction.followup.send(
                 embed=discord.Embed(
@@ -3328,13 +1565,7 @@ async def hire(interaction: discord.Interaction, user: discord.Member):
             return
 
         # Hat der Spieler eine Join-Request gestellt?
-        request = await session.scalar(
-            select(CompanyJoinRequest).where(
-                CompanyJoinRequest.user_id == target_user_id,
-                CompanyJoinRequest.server_id == server_id,
-                CompanyJoinRequest.company_entrepreneur_id == entrepreneur_id
-            )
-        )
+        request = await get_user_join_request(session, entrepreneur_id, server_id, target_user_id)
         if not request:
             await interaction.followup.send(
                 embed=discord.Embed(
@@ -3346,9 +1577,7 @@ async def hire(interaction: discord.Interaction, user: discord.Member):
             return
 
         # Spielerobjekt holen oder erstellen
-        player = await session.scalar(
-            select(Player).where(Player.id == target_user_id, Player.server_id == server_id)
-        )
+        player = await get_player(target_user_id, server_id)
         if not player:
             player = Player(
                 id=target_user_id,
@@ -3396,12 +1625,7 @@ async def marketinfo(interaction: discord.Interaction, item: str):
 
     async for session in get_session():
         # MarketItem abrufen
-        market_entry = await session.scalar(
-            select(MarketItem).where(
-                func.lower(MarketItem.item_tag) == item.lower(),
-                MarketItem.server_id == server_id
-            )
-        )
+        market_entry = await get_market_item(server_id, item)
         if not market_entry:
             await interaction.followup.send(
                 embed=discord.Embed(
@@ -3413,23 +1637,13 @@ async def marketinfo(interaction: discord.Interaction, item: str):
             )
             return
 
+        now = datetime.now()
+
         # BuyOrders abrufen
-        buy_orders = (await session.execute(
-            select(BuyOrder).where(
-                func.lower(BuyOrder.item_tag) == item.lower(),
-                BuyOrder.server_id == server_id,
-                BuyOrder.expires_at > datetime.utcnow()
-            ).order_by(BuyOrder.unit_price.desc())
-        )).scalars().all()
+        buy_orders = await get_item_buy_orders(server_id, market_entry.item_tag, now)
 
         # SellOrders abrufen
-        sell_orders = (await session.execute(
-            select(SellOrder).where(
-                func.lower(SellOrder.item_tag) == item.lower(),
-                SellOrder.server_id == server_id,
-                SellOrder.expires_at > datetime.utcnow()
-            ).order_by(SellOrder.unit_price.asc())
-        )).scalars().all()
+        sell_orders = await get_item_sell_orders(session, server_id, market_entry.item_tag, now)
 
         async def format_order(order):
             user = await interaction.client.fetch_user(order.user_id)
@@ -3521,10 +1735,7 @@ async def gift(interaction: discord.Interaction, user: discord.Member, value: fl
         now = datetime.utcnow()
 
         # Sender prüfen
-        sender = await session.scalar(select(Player).where(
-            Player.id == sender_id,
-            Player.server_id == server_id
-        ))
+        sender = await get_player(sender_id, server_id)
 
         if not sender:
             sender = Player(
@@ -3563,10 +1774,7 @@ async def gift(interaction: discord.Interaction, user: discord.Member, value: fl
             return
 
         # Empfänger prüfen
-        receiver = await session.scalar(select(Player).where(
-            Player.id == receiver_id,
-            Player.server_id == server_id
-        ))
+        receiver = await get_player(receiver_id, server_id)
 
         if not receiver:
             receiver = Player(
@@ -3639,10 +1847,7 @@ async def loan(interaction: discord.Interaction, value: int):
 
     async for session in get_session():
         # Player prüfen oder erstellen
-        player = await session.scalar(
-            select(Player).where(Player.id == user_id, Player.server_id == server_id)
-        )
-
+        player = await get_player(user_id, server_id)
         if not player:
             player = Player(
                 id=user_id,
@@ -3669,7 +1874,7 @@ async def loan(interaction: discord.Interaction, value: int):
             return
 
         # Zinsrate aus Government abfragen
-        government = await session.scalar(select(Government).where(Government.id == server_id))
+        government = await get_government(session, server_id)
         if not government:
             government = Government(
                 id=server_id,
@@ -3737,9 +1942,7 @@ async def paydebt(interaction: discord.Interaction, value: float):
     server_id = int(interaction.guild.id)
 
     async for session in get_session():
-        player = await session.scalar(
-            select(Player).where(Player.id == user_id, Player.server_id == server_id)
-        )
+        player = await get_player(user_id, server_id)
 
         if not player:
             player = Player(
@@ -3814,7 +2017,7 @@ async def setmoney(interaction: discord.Interaction, user: discord.Member, value
 
     async for session in get_session():
         # Check government
-        gov = await session.scalar(select(Government).where(Government.id == server_id))
+        gov = await get_government(session, server_id)
         if not gov:
             gov = Government(
                 id=server_id,
@@ -3841,9 +2044,7 @@ async def setmoney(interaction: discord.Interaction, user: discord.Member, value
 
         # Get player
         user_id = int(user.id)
-        player = await session.scalar(
-            select(Player).where(Player.id == user_id, Player.server_id == server_id)
-        )
+        player = await get_player(user_id, server_id)
 
         if not player:
             player = Player(
@@ -3901,7 +2102,7 @@ async def addmoney(interaction: discord.Interaction, user: discord.Member, value
     executor_roles = [role.id for role in interaction.user.roles]
 
     async for session in get_session():
-        gov = await session.scalar(select(Government).where(Government.id == server_id))
+        gov = await get_government(session, server_id)
         if not gov:
             gov = Government(
                 id=server_id,
@@ -3927,9 +2128,7 @@ async def addmoney(interaction: discord.Interaction, user: discord.Member, value
             return
 
         # Player holen oder erstellen
-        player = await session.scalar(
-            select(Player).where(Player.id == user_id, Player.server_id == server_id)
-        )
+        player = await get_player(user_id, server_id)
 
         if not player:
             player = Player(
@@ -3985,7 +2184,7 @@ async def setsupply(interaction: discord.Interaction, item: str, value: int):
     user_roles = [role.id for role in interaction.user.roles]
 
     async for session in get_session():
-        gov = await session.scalar(select(Government).where(Government.id == server_id))
+        gov = await get_government(session, server_id)
         if not gov:
             ov = Government(
                 id=server_id,
@@ -4021,12 +2220,7 @@ async def setsupply(interaction: discord.Interaction, item: str, value: int):
             )
             return
 
-        market_item = await session.scalar(
-            select(MarketItem).where(
-                func.lower(MarketItem.item_tag) == item.lower(),
-                MarketItem.server_id == server_id
-            )
-        )
+        market_item = await get_market_item(server_id, item)
 
         if not market_item:
             await interaction.followup.send(
@@ -4045,7 +2239,7 @@ async def setsupply(interaction: discord.Interaction, item: str, value: int):
         await interaction.followup.send(
             embed=discord.Embed(
                 title="Stockpile Updated",
-                description=f"Stockpile of `{item}` has been set to **{value}**.",
+                description=f"Stockpile of `{market_item.item_tag}` has been set to **{value}**.",
                 color=discord.Color.green()
             )
         )
@@ -4090,7 +2284,7 @@ async def setprice(interaction: discord.Interaction, item: str, min_price: float
         return
 
     async for session in get_session():
-        gov = await session.scalar(select(Government).where(Government.id == server_id))
+        gov = await get_government(session, server_id)
         if not gov:
             gov = Government(
                 id=server_id,
@@ -4115,12 +2309,7 @@ async def setprice(interaction: discord.Interaction, item: str, min_price: float
             )
             return
 
-        market_item = await session.scalar(
-            select(MarketItem).where(
-                func.lower(MarketItem.item_tag) == item.lower(),
-                MarketItem.server_id == server_id
-            )
-        )
+        market_item = await get_market_item(server_id, item)
 
         if not market_item:
             await interaction.followup.send(
@@ -4166,7 +2355,7 @@ async def setdebt(interaction: discord.Interaction, user: discord.Member, value:
     target_user_id = int(user.id)
 
     async for session in get_session():
-        gov = await session.scalar(select(Government).where(Government.id == server_id))
+        gov = await get_government(session, server_id)
         if not gov:
             gov = Government(
                 id=server_id,
@@ -4191,12 +2380,7 @@ async def setdebt(interaction: discord.Interaction, user: discord.Member, value:
             )
             return
 
-        player = await session.scalar(
-            select(Player).where(
-                Player.id == target_user_id,
-                Player.server_id == server_id
-            )
-        )
+        player = await get_player(target_user_id, server_id)
 
         if not player:
             player = Player(
@@ -4250,7 +2434,7 @@ async def adddebt(interaction: discord.Interaction, user: discord.Member, value:
 
     async for session in get_session():
         # Government prüfen und ggf. Default anlegen
-        gov = await session.scalar(select(Government).where(Government.id == server_id))
+        gov = await get_government(session, server_id)
         if not gov:
             gov = Government(
                 id=server_id,
@@ -4277,12 +2461,7 @@ async def adddebt(interaction: discord.Interaction, user: discord.Member, value:
             return
 
         # Player laden oder anlegen
-        player = await session.scalar(
-            select(Player).where(
-                Player.id == target_user_id,
-                Player.server_id == server_id
-            )
-        )
+        player = await get_player(target_user_id, server_id)
         if not player:
             player = Player(
                 id=target_user_id,
@@ -4334,7 +2513,7 @@ async def additem(interaction: discord.Interaction, user: discord.Member, item: 
 
     async for session in get_session():
         # Government prüfen und ggf. anlegen
-        gov = await session.scalar(select(Government).where(Government.id == server_id))
+        gov = await get_government(session, server_id)
         if not gov:
             gov = Government(
                 id=server_id,
@@ -4361,12 +2540,7 @@ async def additem(interaction: discord.Interaction, user: discord.Member, item: 
             return
 
         # Player laden oder anlegen
-        player = await session.scalar(
-            select(Player).where(
-                Player.id == target_user_id,
-                Player.server_id == server_id
-            )
-        )
+        player = await get_player(target_user_id, server_id)
         if not player:
             player = Player(
                 id=target_user_id,
@@ -4382,8 +2556,8 @@ async def additem(interaction: discord.Interaction, user: discord.Member, item: 
             session.add(player)
             await session.commit()
 
-        # Prüfen, ob Item existiert und produzierbar ist (optional, falls nötig)
-        item_obj = await session.scalar(select(Item).where(func.lower(Item.item_tag) == item.lower()))
+        # Prüfen, ob Item existiert
+        item_obj = await get_item(item_tag)
         if not item_obj:
             await interaction.followup.send(
                 embed=discord.Embed(
@@ -4395,7 +2569,7 @@ async def additem(interaction: discord.Interaction, user: discord.Member, item: 
             return
 
         # Item hinzufügen - nur Player Items, kein Company Item hier
-        await add_item(target_user_id, server_id, item, amount, is_company=False)
+        await add_player_item(session, target_user_id, server_id, item, amount)
 
         await session.commit()
 
@@ -4431,7 +2605,7 @@ async def removeitem(interaction: discord.Interaction, user: discord.Member, ite
 
     async for session in get_session():
         # Government prüfen und ggf. anlegen
-        gov = await session.scalar(select(Government).where(Government.id == server_id))
+        gov = await get_government(session, server_id)
         if not gov:
             gov = Government(
                 id=server_id,
@@ -4458,12 +2632,7 @@ async def removeitem(interaction: discord.Interaction, user: discord.Member, ite
             return
 
         # Player laden oder anlegen
-        player = await session.scalar(
-            select(Player).where(
-                Player.id == target_user_id,
-                Player.server_id == server_id
-            )
-        )
+        player = await get_player(target_user_id, server_id)
         if not player:
             player = Player(
                 id=target_user_id,
@@ -4480,13 +2649,7 @@ async def removeitem(interaction: discord.Interaction, user: discord.Member, ite
             await session.commit()
 
         # PlayerItem abrufen
-        player_item = await session.scalar(
-            select(PlayerItem).where(
-                PlayerItem.user_id == target_user_id,
-                PlayerItem.server_id == server_id,
-                func.lower(PlayerItem.item_tag) == item.lower()
-            )
-        )
+        player_item = await get_player_item(target_user_id, server_id,  item)
         if not player_item or player_item.amount <= 0:
             await interaction.followup.send(
                 embed=discord.Embed(
@@ -4538,7 +2701,7 @@ async def bailout(interaction: discord.Interaction, user: discord.Member):
 
     async for session in get_session():
         # Government laden oder erstellen
-        gov = await session.scalar(select(Government).where(Government.id == server_id))
+        gov = await get_government(session, server_id)
         if not gov:
             gov = Government(
                 id=server_id,
@@ -4565,12 +2728,7 @@ async def bailout(interaction: discord.Interaction, user: discord.Member):
             return
 
         # Player laden oder erstellen
-        player = await session.scalar(
-            select(Player).where(
-                Player.id == target_user_id,
-                Player.server_id == server_id
-            )
-        )
+        player = await get_player(target_user_id, server_id)
         if not player:
             player = Player(
                 id=target_user_id,
@@ -4751,8 +2909,7 @@ async def ingredients(interaction: Interaction, item: str):
 
     async for session in get_session():
         # Fetch item
-        result = await session.execute(select(Item).where(func.lower(Item.item_tag) == item.lower()))
-        item_obj = result.scalar_one_or_none()
+        item_obj = await get_item(item)
 
         if not item_obj:
             await interaction.followup.send(
@@ -4776,7 +2933,6 @@ async def ingredients(interaction: Interaction, item: str):
             )
             return
 
-        ingredients_list = []
         total_cost = 0.0
         lines = []
 
@@ -4785,12 +2941,7 @@ async def ingredients(interaction: Interaction, item: str):
             amount = int(amount_str)
 
             # Fetch market price
-            market_entry = await session.scalar(
-                select(MarketItem).where(
-                    MarketItem.item_tag == tag,
-                    MarketItem.server_id == server_id
-                )
-            )
+            market_entry = await get_market_item(server_id, tag)
 
             price = market_entry.max_price if market_entry else 0.0
             cost = price * amount
@@ -4835,8 +2986,8 @@ async def buymaterials(interaction: discord.Interaction, item: str, amount: int 
                     "Buy_Price must be a value >= 0 and <= 1. "
                     "It represents the percentage between min_price and max_price. "
                     "I.e. 0 = min_price, 1 = max_price, 0.5 = middle"
-                ), color=discord.Color.red(), ephemeral = True
-            )
+                ), color=discord.Color.red()
+            ), ephemeral = True
         )
         return
 
@@ -4845,10 +2996,7 @@ async def buymaterials(interaction: discord.Interaction, item: str, amount: int 
 
     async for session in get_session():
         # Company check
-        company = await session.scalar(select(Company).where(
-            Company.entrepreneur_id == user_id,
-            Company.server_id == server_id
-        ))
+        company = await get_company(user_id, server_id)
         if not company:
             await interaction.followup.send(
                 embed=discord.Embed(
@@ -4862,7 +3010,7 @@ async def buymaterials(interaction: discord.Interaction, item: str, amount: int 
             return
 
         # Item + ingredients
-        item_data = await session.scalar(select(Item).where(func.lower(Item.item_tag) == item.lower()))
+        item_data = await get_item(item)
         if not item_data or not item_data.ingredients:
             await interaction.followup.send(
                 embed=discord.Embed(
@@ -4884,10 +3032,7 @@ async def buymaterials(interaction: discord.Interaction, item: str, amount: int 
             tag, qty_str = ing.split(":")
             qty = int(qty_str) * amount
 
-            market_item = await session.scalar(select(MarketItem).where(
-                MarketItem.item_tag == tag,
-                MarketItem.server_id == server_id
-            ))
+            market_item = await get_market_item(server_id, tag)
             if not market_item:
                 await interaction.followup.send(
                     embed=discord.Embed(
@@ -4953,11 +3098,7 @@ async def buymaterials(interaction: discord.Interaction, item: str, amount: int 
             company.capital -= total_cost
 
             for tag, qty, _, _ in purchases:
-                ci = await session.scalar(select(CompanyItem).where(
-                    CompanyItem.server_id == server_id,
-                    CompanyItem.company_entrepreneur_id == user_id,
-                    CompanyItem.item_tag == tag
-                ))
+                ci = await get_company_item(session, user_id, server_id, tag)
                 if ci:
                     ci.amount += qty
                 else:
@@ -4970,10 +3111,7 @@ async def buymaterials(interaction: discord.Interaction, item: str, amount: int 
 
             # Stock reduzieren und Preise leicht anpassen
             for tag, qty, unit_price, _ in purchases:
-                mi = await session.scalar(select(MarketItem).where(
-                    MarketItem.item_tag == tag,
-                    MarketItem.server_id == server_id
-                ))
+                mi = await get_market_item(server_id, tag)
                 if mi:
                     mi.stockpile -= qty
                     mi.min_price = round(mi.min_price * 1.005, 2)
@@ -5019,13 +3157,9 @@ class TaxCommandGroup(app_commands.Group):
         server_id = interaction.guild.id
 
         async for session in get_session():
-            players = (await session.execute(
-                select(Player).where(Player.server_id == server_id, Player.taxes_owed > 0)
-            )).scalars().all()
+            players = await get_tax_owing_players(server_id)
 
-            companies = (await session.execute(
-                select(Company).where(Company.server_id == server_id, Company.taxes_owed > 0)
-            )).scalars().all()
+            companies = await get_tax_owing_companies(server_id)
 
             lines = []
 
@@ -5057,7 +3191,7 @@ class TaxCommandGroup(app_commands.Group):
         user_id = interaction.user.id
 
         async for session in get_session():
-            player = await session.scalar(select(Player).where(Player.id == user_id, Player.server_id == server_id))
+            player = await get_player(user_id, server_id)
             if not player:
                 # Standardwerte
                 player = Player(
@@ -5074,8 +3208,7 @@ class TaxCommandGroup(app_commands.Group):
                 session.add(player)
                 await session.commit()
 
-            company = await session.scalar(
-                select(Company).where(Company.entrepreneur_id == user_id, Company.server_id == server_id))
+            company = await get_company(user_id, server_id)
             total_personal = player.taxes_owed
             total_company = company.taxes_owed if company else 0
             total_owed = total_personal + total_company
@@ -5106,7 +3239,7 @@ class TaxCommandGroup(app_commands.Group):
                 msg += f"🧍 Paid ${pay:.2f} in personal taxes."
 
             # ➕ Regierung laden und Geld in die Treasury
-            gov = await session.scalar(select(Government).where(Government.id == server_id))
+            gov = await get_government(session, server_id)
             if not gov:
                 gov = Government(
                     id=server_id,
@@ -5145,7 +3278,7 @@ class TaxCommandGroup(app_commands.Group):
         user_roles = [r.id for r in interaction.user.roles]
 
         async for session in get_session():
-            gov = await session.scalar(select(Government).where(Government.id == server_id))
+            gov = await get_government(session, server_id)
             if not gov:
                 gov = Government(
                     id=server_id,
@@ -5192,7 +3325,7 @@ async def government(interaction: discord.Interaction):
     server_id = interaction.guild.id
 
     async for session in get_session():
-        gov = await session.scalar(select(Government).where(Government.id == server_id))
+        gov = await get_government(session, server_id)
 
         if not gov:
             gov = Government(
@@ -5227,16 +3360,7 @@ async def government(interaction: discord.Interaction):
         today = date.today()
         seven_days_ago = today - timedelta(days=6)
 
-        gdp_entries = (
-            await session.execute(
-                select(GovernmentGDP)
-                .where(
-                    GovernmentGDP.server_id == server_id,
-                    GovernmentGDP.date >= seven_days_ago
-                )
-                .order_by(GovernmentGDP.date)
-            )
-        ).scalars().all()
+        gdp_entries = await get_all_gdp_entries(session, server_id, seven_days_ago)
 
         if gdp_entries:
             gdp_text = ""
