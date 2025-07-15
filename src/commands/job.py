@@ -8,7 +8,7 @@ from src.config import JOB_SWITCH_COOLDOWN
 
 async def job(interaction: Interaction, job_type: app_commands.Choice[str]):
     print(f"{interaction.user}: /job {job_type.value}")
-    await interaction.response.defer(thinking=True, ephemeral=False)
+    await interaction.response.defer(thinking=True)
 
     user_id = int(interaction.user.id)
     server_id = int(interaction.guild.id)
@@ -36,6 +36,15 @@ async def check_if_employed(interaction, player, job_type):
         embed = Embed(
             title="Job Change Failed",
             description=f"❌ You already have the job **{job_type.value or 'jobless'}**.",
+            color=Color.red()
+        )
+        await interaction.followup.send(embed=embed, ephemeral=True)
+        return True
+    
+    if player.job == "Entrepreneur":
+        embed = Embed(
+            title="Job Change Failed",
+            description=f"❌ You are currently an entrepreneur. Please first disband your company with /company disband.",
             color=Color.red()
         )
         await interaction.followup.send(embed=embed, ephemeral=True)

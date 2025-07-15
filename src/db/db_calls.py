@@ -838,29 +838,45 @@ async def delete_sell_orders(user_id, server_id, item_tag, price=None):
 
 
 async def update_player(player: Player):
-    data = asdict(player)
-    pk = {"id": data.pop("id"), "server_id": data.pop("server_id")}
+
+    def serialize_value(value):
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+    
+
+    data = {k: serialize_value(v) for k, v in player.__dict__.items()}
+    
     response = (
         supabase.table("Players")
         .update(data)
-        .eq("id", pk["id"])
-        .eq("server_id", pk["server_id"])
+        .eq("id", player.id)
+        .eq("server_id", player.server_id)
         .execute()
     )
+
     return response.data
 
 
 
 async def update_company(company: Company):
-    data = asdict(company)
-    pk = {"entrepreneur_id": data.pop("entrepreneur_id"), "server_id": data.pop("server_id")}
+
+    def serialize_value(value):
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+    
+
+    data = {k: serialize_value(v) for k, v in company.__dict__.items()}
+    
     response = (
         supabase.table("Companies")
         .update(data)
-        .eq("entrepreneur_id", pk["entrepreneur_id"])
-        .eq("server_id", pk["server_id"])
+        .eq("id", company.entrepreneur_id)
+        .eq("server_id", company.server_id)
         .execute()
     )
+
     return response.data
 
 
@@ -905,20 +921,34 @@ async def update_company_join_request(request: CompanyJoinRequest):
 
 
 async def update_government(gov: Government):
-    data = asdict(gov)
-    pk = {"id": data.pop("id")}
+    def serialize_value(value):
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+    
+
+    data = {k: serialize_value(v) for k, v in gov.__dict__.items()}
+    
     response = (
         supabase.table("Government")
         .update(data)
-        .eq("id", pk["id"])
+        .eq("id", gov.id)
         .execute()
     )
+
     return response.data
 
 
 
 async def update_government_gdp(gdp: GovernmentGDP):
-    data = asdict(gdp)
+    def serialize_value(value):
+        if isinstance(value, date):
+            return value.isoformat()
+        return value
+    
+
+    data = {k: serialize_value(v) for k, v in gdp.__dict__.items()}
+
     pk = {"server_id": data.pop("server_id"), "date": data.pop("date")}
     response = (
         supabase.table("Government_GDP")
@@ -965,7 +995,14 @@ async def update_player_item(item: PlayerItem):
 
 
 async def update_sell_order(order: SellOrder):
-    data = asdict(order)
+    def serialize_value(value):
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+    
+
+    data = {k: serialize_value(v) for k, v in order.__dict__.items()}
+
     pk = {
         "user_id": data.pop("user_id"),
         "server_id": data.pop("server_id"),
@@ -988,7 +1025,14 @@ async def update_sell_order(order: SellOrder):
 
 
 async def update_buy_order(order: BuyOrder):
-    data = asdict(order)
+    def serialize_value(value):
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+    
+
+    data = {k: serialize_value(v) for k, v in order.__dict__.items()}
+
     pk = {
         "user_id": data.pop("user_id"),
         "server_id": data.pop("server_id"),
@@ -1059,10 +1103,21 @@ async def delete_player_item(user_id: int, item_tag: str, server_id: int):
 
 
 async def add_object(obj: Any, table_name: str):
+    def serialize_value(value):
+        if isinstance(value, datetime):
+            print(value)
+            print(value.isoformat())
+            return value.isoformat()
+        return value
+    
+
+    data = {k: serialize_value(v) for k, v in obj.__dict__.items()}
+    
     response = (
         supabase.table(table_name)
-        .insert(obj.__dict__)
+        .insert(data)
         .execute()
     )
+
     return response.data
 
