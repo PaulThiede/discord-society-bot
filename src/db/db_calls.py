@@ -977,7 +977,7 @@ async def delete_player_item(user_id: int, item_tag: str, server_id: int):
     return response.data
 
 
-async def add_object(obj: Any, table_name: str):
+async def add_object(obj, table_name: str):
     response = (
         supabase.table(table_name)
         .insert(obj.__dict__)

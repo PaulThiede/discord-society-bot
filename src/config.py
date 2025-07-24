@@ -7,6 +7,7 @@ load_dotenv()
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = int(os.getenv("GUILD_ID"))
+PORT = int(os.getenv("PORT"))
 
 JOB_SWITCH_COOLDOWN = timedelta(minutes=30)
 WORK_COOLDOWN = timedelta(minutes=5)

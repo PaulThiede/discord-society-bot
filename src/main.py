@@ -5,17 +5,22 @@ from discord import app_commands, Embed, Interaction, User, ButtonStyle, Member
 from discord.ui import Button, View, button
 from sqlalchemy import select, delete, update, and_, asc, func
 from discord.app_commands import Choice
+from fastapi import FastAPI
+from fastapi.responses import PlainTextResponse
+import uvicorn
+import asyncio
 
 from math import floor, ceil
 from sqlalchemy.ext.asyncio import AsyncSession
+import threading
 
 
 from datetime import timedelta, date
 
-from commands import ping, get_items, stats, job, chop, mine, farm, harvest, drink, eat, consume, buy, sell
-from db.models import Player, PlayerItem, Item, MarketItem, BuyOrder, SellOrder, Company, Government, CompanyItem, CompanyJoinRequest, GovernmentGDP
-from config import TOKEN, GUILD_ID, JOB_SWITCH_COOLDOWN, WORK_COOLDOWN, BUY_ORDER_DURATION, SELL_ORDER_DURATION, GIFT_COOLDOWN
-from db.db import get_session, supabase
+from src.commands import ping, get_items, stats, job, chop, mine, farm, harvest, drink, eat, consume, buy, sell
+from src.db.models import Player, PlayerItem, Item, MarketItem, BuyOrder, SellOrder, Company, Government, CompanyItem, CompanyJoinRequest, GovernmentGDP
+from src.config import TOKEN, GUILD_ID, JOB_SWITCH_COOLDOWN, WORK_COOLDOWN, BUY_ORDER_DURATION, SELL_ORDER_DURATION, GIFT_COOLDOWN, PORT
+from src.db.db import get_session, supabase
 from src.commands import order_view, order_remove
 from src.db.db_calls import (get_item, get_company, get_buy_orders, get_market_item, get_all_items, get_player, \
                              get_own_sell_orders, get_own_buy_orders, get_sell_orders, get_employees,
@@ -32,6 +37,14 @@ from src.helper.defaults import get_default_market_item
 from src.helper.item import add_company_item, add_player_item, has_player_item, use_item
 from src.helper.randoms import get_hunger_depletion, get_thirst_depletion
 from src.helper.transactions import add_owed_taxes
+
+
+app = FastAPI()
+
+@app.get("/ping")
+def ping():
+    return "pong"
+
 
 class Client(commands.Bot):
     async def on_ready(self):
@@ -758,16 +771,6 @@ class CompanyGroup(app_commands.Group):
                     color=discord.Color.green()
                 )
             )
-                    '''
-            except Exception as e:
-                await interaction.followup.send(
-                    embed=discord.Embed(
-                        title="Internal Bot Error Occured",
-                        description=e,
-                        color=discord.Color.green()
-                    )
-                )
-                '''
 
 
     @app_commands.command(
@@ -3503,5 +3506,7 @@ client.tree.add_command(CompanyGroup(), guild=guild_id)
 client.tree.add_command(TaxCommandGroup(), guild=guild_id)
 
 
-
-client.run(TOKEN)
+@app.on_event("startup")
+async def startup_event():
+    import asyncio
+    asyncio.create_task(client.start(TOKEN))
