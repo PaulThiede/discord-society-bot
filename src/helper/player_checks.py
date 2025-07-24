@@ -29,17 +29,17 @@ async def check_if_on_cooldown(interaction, player):
         return True
 
     player.work_cooldown_until = now + WORK_COOLDOWN
-    update_player(player)
+    await update_player(player)
 
     return False
 
-async def get_tool(interaction, session, player, items, err_message):
+async def get_tool(interaction, player, items, err_message):
     tool = None
     for item in items:
         if item == "F" or item == "W" or item == "N" or item == "P":
             tool = f"Hand-{item}"
             continue
-        if await has_player_item(session, player.id, player.server_id, item, min_amount=1): tool = item
+        if await has_player_item(player.id, player.server_id, item, min_amount=1): tool = item
 
     if not tool:
         await interaction.followup.send(embed=Embed(
@@ -71,6 +71,6 @@ async def check_hunger_thirst_bar(interaction, player):
     old_thirst = player.thirst
     player.hunger = max(0, player.hunger - get_hunger_depletion())
     player.thirst = max(0, player.thirst - get_thirst_depletion())
-    update_player(player)
+    await update_player(player)
 
     return old_hunger, old_thirst

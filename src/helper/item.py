@@ -2,7 +2,7 @@
 
 from src.db.models import PlayerItem
 from src.db.db_calls import get_player_item, get_item, get_company_item, delete_player_item, update_player_item, \
-    add_object
+    add_object, update_company_item
 from src.helper.defaults import get_default_player_item, get_default_company_item
 
 async def has_player_item(user_id, server_id, item_tag, min_amount=1):
@@ -46,6 +46,7 @@ async def add_player_item(user_id, server_id, item_tag, amount):
     player_item = await get_player_item(user_id, server_id, item_tag)
     if player_item:
         player_item.amount += amount
+        await update_player_item(player_item)
     else:
         player_item = await get_default_player_item(user_id, server_id, item_tag, amount)
         await add_object(player_item, "Player_Items")
@@ -57,6 +58,7 @@ async def add_company_item(user_id, server_id, item_tag, amount):
     company_item = await get_company_item(user_id, server_id, item_tag)
     if company_item:
         company_item.amount += amount
+        await update_company_item(company_item)
     else:
         company_item = get_default_company_item(user_id, server_id, item_tag, amount)
         await add_object(company_item, "Company_Items")

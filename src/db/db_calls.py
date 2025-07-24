@@ -204,6 +204,7 @@ async def get_tax_owing_players(server_id):
             .select("*")
             .eq("server_id", server_id)
             .gt("taxes_owed", 0)
+            .order("taxes_owed", desc=True)
             .execute()
         )
 
@@ -221,10 +222,10 @@ async def get_tax_owing_players(server_id):
                 health=entry.get("health"),
                 company_entrepreneur_id=entry.get("company_entrepreneur_id"),
                 taxes_owed=entry.get("taxes_owed"),
-                work_cooldown_until=datetime.fromisoformat(str(entry.get("work_cooldown_until"))),
-                job_switch_cooldown_until=datetime.fromisoformat(str(entry.get("job_switch_cooldown_until"))),
-                company_creation_cooldown_until=datetime.fromisoformat(str(entry.get("company_creation_cooldown_until"))),
-                gift_cooldown_until=datetime.fromisoformat(str(entry.get("gift_cooldown_until"))),
+                work_cooldown_until=datetime.fromisoformat(str(entry.get("work_cooldown_until"))) if entry.get("work_cooldown_until") else None,
+                job_switch_cooldown_until=datetime.fromisoformat(str(entry.get("job_switch_cooldown_until"))) if entry.get("job_switch_cooldown_until") else None,
+                company_creation_cooldown_until=datetime.fromisoformat(str(entry.get("company_creation_cooldown_until"))) if entry.get("company_creation_cooldown_until") else None,
+                gift_cooldown_until=datetime.fromisoformat(str(entry.get("gift_cooldown_until"))) if entry.get("gift_cooldown_until") else None,
             ))
 
         return players
@@ -238,6 +239,7 @@ async def get_tax_owing_companies(server_id):
             .select("*")
             .eq("server_id", server_id)
             .gt("taxes_owed", 0)
+            .order("taxes_owed", desc=True)
             .execute()
         )
 
@@ -464,19 +466,31 @@ async def get_company_inventory(user_id: int, server_id: int):
 
 
 
-async def get_own_sell_orders(user_id: int, server_id: int, item_tag: str, unit_price: float, is_company: bool = False):
+async def get_own_sell_orders(user_id: int, server_id: int, item_tag: str, unit_price: float, is_company):
+    
     try:
-        response = (
-            supabase.table("Sell_Orders")
-            .select("*")
-            .eq("user_id", user_id)
-            .eq("item_tag", item_tag)
-            .eq("server_id", server_id)
-            .eq("unit_price", unit_price)
-            .eq("is_company", is_company)
-            .execute()
-        )
-
+        if is_company == "both":
+            response = (
+                supabase.table("Sell_Orders")
+                .select("*")
+                .eq("user_id", user_id)
+                .eq("item_tag", item_tag)
+                .eq("server_id", server_id)
+                .eq("unit_price", unit_price)
+                .execute()
+            )
+        else:
+           response = (
+                supabase.table("Sell_Orders")
+                .select("*")
+                .eq("user_id", user_id)
+                .eq("item_tag", item_tag)
+                .eq("server_id", server_id)
+                .eq("unit_price", unit_price)
+                .eq("is_company", is_company)
+                .execute()
+            ) 
+        orders = []
         for entry in response.data:
             # expires_at ist datetime, in DB meist String -> Vergleich nötig
             entry_expires_at = entry.get("expires_at")
@@ -484,7 +498,7 @@ async def get_own_sell_orders(user_id: int, server_id: int, item_tag: str, unit_
                 # Falls string, in datetime konvertieren für Vergleich
 
                 db_expires_at = parse(entry_expires_at) if isinstance(entry_expires_at, str) else entry_expires_at
-                return SellOrder(
+                orders.append(SellOrder(
                     user_id=entry.get("user_id"),
                     item_tag=entry.get("item_tag"),
                     server_id=entry.get("server_id"),
@@ -492,8 +506,8 @@ async def get_own_sell_orders(user_id: int, server_id: int, item_tag: str, unit_
                     unit_price=entry.get("unit_price"),
                     expires_at=db_expires_at,
                     is_company=entry.get("is_company"),
-                )
-        return None
+                ))
+        return orders
     except Exception as e:
         print(e)
 
@@ -574,16 +588,26 @@ async def get_item_sell_orders(server_id: int, item_tag: str, now: datetime):
         print(e)
 
 
-async def get_all_own_sell_orders(user_id: int, server_id: int, now: datetime, is_company=False):
+async def get_all_own_sell_orders(user_id: int, server_id: int, now: datetime, is_company):
     try:
-        response = (
+        if is_company == "both":
+            response = (
             supabase.table("Sell_Orders")
             .select("*")
             .eq("user_id", user_id)
             .eq("server_id", server_id)
-            .eq("is_company", is_company)
             .execute()
         )
+        else:
+
+            response = (
+                supabase.table("Sell_Orders")
+                .select("*")
+                .eq("user_id", user_id)
+                .eq("server_id", server_id)
+                .eq("is_company", is_company)
+                .execute()
+            )
 
         valid_orders = []
         for entry in response.data:
@@ -613,17 +637,28 @@ async def get_all_own_sell_orders(user_id: int, server_id: int, now: datetime, i
 
 
 
-async def get_own_item_sell_orders(user_id: int, server_id: int, item_tag: str, now: datetime, is_company=False):
+async def get_own_item_sell_orders(user_id: int, server_id: int, item_tag: str, now: datetime, is_company):
     try:
-        response = (
-            supabase.table("Sell_Orders")
-            .select("*")
-            .eq("user_id", user_id)
-            .eq("server_id", server_id)
-            .eq("item_tag", item_tag)
-            .eq("is_company", is_company)
-            .execute()
-        )
+        if is_company == "both":
+            response = (
+                supabase.table("Sell_Orders")
+                .select("*")
+                .eq("user_id", user_id)
+                .eq("server_id", server_id)
+                .eq("item_tag", item_tag)
+                .execute()
+            )
+        else:
+            response = (
+                supabase.table("Sell_Orders")
+                .select("*")
+                .eq("user_id", user_id)
+                .eq("server_id", server_id)
+                .eq("item_tag", item_tag)
+                .eq("is_company", is_company)
+                .execute()
+            )
+
 
         valid_orders = []
         for entry in response.data:
@@ -726,16 +761,25 @@ async def get_item_buy_orders(server_id: int, item_tag: str, now: datetime):
         print(e)
 
 
-async def get_all_own_buy_orders(user_id: int, server_id: int, now: datetime, is_company=False):
+async def get_all_own_buy_orders(user_id: int, server_id: int, now: datetime, is_company):
     try:
-        response = (
-            supabase.table("Buy_Orders")
-            .select("*")
-            .eq("user_id", user_id)
-            .eq("server_id", server_id)
-            .eq("is_company", is_company)
-            .execute()
-        )
+        if is_company == "both":
+            response = (
+                supabase.table("Buy_Orders")
+                .select("*")
+                .eq("user_id", user_id)
+                .eq("server_id", server_id)
+                .execute()
+            )
+        else:
+            response = (
+                supabase.table("Buy_Orders")
+                .select("*")
+                .eq("user_id", user_id)
+                .eq("server_id", server_id)
+                .eq("is_company", is_company)
+                .execute()
+            )
 
         valid_orders = []
         for entry in response.data:
@@ -1249,6 +1293,12 @@ async def add_object(obj: Any, table_name: str):
 
         if isinstance(data.get("date"), date):
             data["date"] = data["date"].isoformat()
+
+        if isinstance(data.get("expires_at"), datetime):
+            data["expires_at"] = data["expires_at"].isoformat()
+
+        if isinstance(data.get("created_at"), datetime):
+            data["created_at"] = data["created_at"].isoformat()
 
         response = (
             supabase.table(table_name)

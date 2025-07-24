@@ -54,17 +54,17 @@ async def transfer_money(interaction, order: BuyOrder | SellOrder, total_price,
 
     if seller_type == "company":
         seller.capital += total_price
-        update_company(seller)
+        await update_company(seller)
     else:
         seller.money += total_price
-        update_player(seller)
+        await update_player(seller)
 
     if buyer_type == "company":
         buyer.capital -= total_price
-        update_company(buyer)
+        await update_company(buyer)
     else:
         buyer.money -= total_price
-        update_player(buyer)
+        await update_player(buyer)
     
     await add_owed_taxes(user_id=seller.entrepreneur_id, server_id=buyer.server_id,
                          amount=total_price, is_company=True if seller_type == "company" else False)
