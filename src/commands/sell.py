@@ -39,7 +39,7 @@ async def sell(
 
     if not player:
         player = get_default_player(user_id, server_id)
-        add_object(player, "Players")
+        await add_object(player, "Players")
 
     if not await has_enough_items(interaction, player, item_tag, amount): return
 

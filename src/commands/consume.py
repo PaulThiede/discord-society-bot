@@ -27,7 +27,7 @@ async def consume(interaction: Interaction, item: app_commands.Choice[str]):
 
     if not player:
         player = get_default_player(user_id, server_id)
-        add_object(player, "Players")
+        await add_object(player, "Players")
 
     if await check_if_bars_full(interaction, player): return
 

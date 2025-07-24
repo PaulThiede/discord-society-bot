@@ -18,7 +18,7 @@ async def harvest(interaction):
 
     if not player:
         player = get_default_player(user_id, server_id)
-        add_object(player, "Players")
+        await add_object(player, "Players")
 
     job_name = "Special Job: "
     err_message = ""

@@ -14,7 +14,7 @@ async def eat(interaction: Interaction, direct_execution = True):
 
     if not player:
         player = get_default_player(user_id, server_id)
-        add_object(player, "Players")
+        await add_object(player, "Players")
 
     if await check_if_hunger_full(interaction, player): return
 

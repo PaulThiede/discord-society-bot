@@ -14,7 +14,7 @@ async def drink(interaction: Interaction, direct_execution = True):
 
     if not player:
         player = get_default_player(user_id, server_id)
-        add_object(player, "Players")
+        await add_object(player, "Players")
 
     if await check_if_thirst_full(interaction, player): return
 
