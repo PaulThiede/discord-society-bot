@@ -1304,6 +1304,7 @@ async def setitems(interaction: discord.Interaction, item1: str, item2: str = ""
 )
 @app_commands.describe(item="The item you want to produce")
 async def work(interaction: discord.Interaction, item: str):
+    print(f"{interaction.user}: /work {item}")
     await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /work {item}")
 
