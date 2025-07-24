@@ -16,7 +16,7 @@ async def stats(interaction: Interaction, user: User | Member = None):
 
     if not player:
         player = get_default_player(user_id, server_id)
-        add_object(player, "Players")
+        await add_object(player, "Players")
 
 
     embed = create_stats_embed(target_user, player)

@@ -39,7 +39,7 @@ async def buy(
 
     if not player:
         player = get_default_player(user_id, server_id)
-        add_object(player, "Players")
+        await add_object(player, "Players")
 
     if await check_enough_money(interaction, player, item_tag, unit_price, amount): return
 
@@ -59,7 +59,7 @@ async def buy(
         now = datetime.now()
         new_order = get_default_buy_order(user_id, item_tag, server_id, amount, unit_price,
                                             now + BUY_ORDER_DURATION, False)
-        add_object(new_order, "Buy_Orders")
+        await add_object(new_order, "Buy_Orders")
 
         await interaction.followup.send(
             embed=Embed(
@@ -124,7 +124,7 @@ async def check_market_initialized(server_id, item_tag):
 
         for item in items:
             market_item = get_default_market_item(item, server_id)
-            add_object(market_item, "Market_Items")
+            await add_object(market_item, "Market_Items")
 
 
 async def handle_player_sell_orders(interaction, player, item_tag, unit_price, amount):

@@ -1304,9 +1304,9 @@ async def setitems(interaction: discord.Interaction, item1: str, item2: str = ""
 )
 @app_commands.describe(item="The item you want to produce")
 async def work(interaction: discord.Interaction, item: str):
-    print(f"{interaction.user}: /work {item}")
+    print(f"{interaction.user}: /work {item}", flush=True)
     await interaction.response.defer(thinking=True)
-    print(f"{interaction.user}: /work {item}")
+    print(f"{interaction.user}: /work {item}", flush=True)
 
     user_id = int(interaction.user.id)
     server_id = int(interaction.guild.id)
