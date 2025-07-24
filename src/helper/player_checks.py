@@ -8,7 +8,7 @@ from src.helper.randoms import get_hunger_depletion, get_thirst_depletion
 from src.config import WORK_COOLDOWN
 
 async def check_if_employed(interaction, player, job):
-    if not job in player.job:
+    if player.job is None or not job in player.job:
         await interaction.followup.send(embed=Embed(
             title="Error!",
             description=f"You are not a {job}!",

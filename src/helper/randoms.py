@@ -27,8 +27,8 @@ def generate_resources(choices: List[str], tool) -> Tuple:
         amount = randint(1, 5) if resource_type == "Grain" else randint(2, 6) if resource_type == "Fish" \
             else randint(2, 6) if resource_type == "Leather" else randint(1, 5)  # Wool
     elif tool == "Tractor":
-        amount = randint(4, 10) if resource_type == "Grain" else randint(5, 11) if resource_type == "Fish" \
-            else randint(5, 11) if resource_type == "Leather" else randint(4, 10)  # Wool
+        amount = randint(8, 10) if resource_type == "Grain" else randint(10, 14) if resource_type == "Fish" \
+            else randint(10, 14) if resource_type == "Leather" else randint(8, 10)  # Wool
 
     ### SPECIAL JOB ###
     elif tool == "Hand-W" or tool == "Hand-N" or tool == "Hand-P":

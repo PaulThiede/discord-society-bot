@@ -19,59 +19,56 @@ async def sell(
 ):
     print(f"{interaction.user}: /sell item: {item}, unit_price: {unit_price}, amount: {amount}")
 
-    try:
 
-        if amount <= 0 or unit_price <= 0:
-            await interaction.followup.send(
-                embed=Embed(
-                    title="Error!",
-                    description="Amount and unit price must be greater than 0.",
-                    color=Color.red()
-                ), ephemeral=True
+    if amount <= 0 or unit_price <= 0:
+        await interaction.followup.send(
+            embed=Embed(
+                title="Error!",
+                description="Amount and unit price must be greater than 0.",
+                color=Color.red()
+            ), ephemeral=True
+        )
+        return
+
+    user_id = int(interaction.user.id)
+    server_id = int(interaction.guild.id)
+
+    item_tag = await check_item_exists(interaction, item)
+    if not item_tag: return
+
+    player = await get_player(user_id, server_id)
+
+    if not player:
+        player = get_default_player(user_id, server_id)
+        await add_object(player, "Players")
+
+    if not await has_enough_items(interaction, player, item_tag, amount): return
+
+    if await check_existing_orders(interaction, user_id, server_id, item_tag, unit_price, amount): return
+
+    await check_market_initialized(server_id, item_tag)
+
+    amount = await handle_player_buy_orders(interaction, player, item_tag, unit_price, amount)
+
+    market_item = await get_market_item(server_id, item_tag)
+
+    if amount > 0 and unit_price <= market_item.min_price and market_item.stockpile > 0:
+        amount = await sell_to_npc_market(interaction, player, market_item, amount)
+
+
+    if amount > 0:
+        now = datetime.now()
+        new_order = get_default_sell_order(user_id, item_tag, server_id, amount, unit_price,
+                                            now + SELL_ORDER_DURATION, False)
+        await add_object(new_order, "Sell_Orders")
+
+        await interaction.followup.send(
+            embed=Embed(
+                title="Sell Order Placed",
+                description=f"A sell order for **{amount}x {item_tag}** at **${unit_price:.2f}** has been created.",
+                color=Color.green()
             )
-            return
-
-        user_id = int(interaction.user.id)
-        server_id = int(interaction.guild.id)
-
-        item_tag = await check_item_exists(interaction, item)
-        if not item_tag: return
-
-        player = await get_player(user_id, server_id)
-
-        if not player:
-            player = get_default_player(user_id, server_id)
-            await add_object(player, "Players")
-
-        if not await has_enough_items(interaction, player, item_tag, amount): return
-
-        if await check_existing_orders(interaction, user_id, server_id, item_tag, unit_price, amount): return
-
-        await check_market_initialized(server_id, item_tag)
-
-        amount = await handle_player_buy_orders(interaction, player, item_tag, unit_price, amount)
-
-        market_item = await get_market_item(server_id, item_tag)
-
-        if amount > 0 and unit_price <= market_item.min_price and market_item.stockpile > 0:
-            amount = await sell_to_npc_market(interaction, player, market_item, amount)
-
-
-        if amount > 0:
-            now = datetime.now()
-            new_order = get_default_sell_order(user_id, item_tag, server_id, amount, unit_price,
-                                                now + SELL_ORDER_DURATION, False)
-            await add_object(new_order, "Sell_Orders")
-
-            await interaction.followup.send(
-                embed=Embed(
-                    title="Sell Order Placed",
-                    description=f"A sell order for **{amount}x {item_tag}** at **${unit_price:.2f}** has been created.",
-                    color=Color.green()
-                )
-            )
-    except Exception as e:
-        print(e)
+        )
 
 async def check_item_exists(interaction, item):
     item_obj = await get_item(item)
@@ -103,9 +100,10 @@ async def check_existing_orders(interaction, user_id, server_id, item_tag, unit_
     now = datetime.now()
     expires_at = now + SELL_ORDER_DURATION
 
-    existing_order = await get_own_sell_orders(user_id, server_id, item_tag, unit_price, False)
+    existing_orders = await get_own_sell_orders(user_id, server_id, item_tag, unit_price, False)
 
-    if existing_order:
+    if len(existing_orders) > 0:
+        existing_order = existing_orders[0]
         existing_order.amount += amount
         existing_order.expires_at = expires_at
         await update_sell_order(existing_order)
@@ -184,7 +182,7 @@ async def handle_player_buy_orders(interaction, player, item_tag, unit_price, am
                     color=Color.green()
                 )
             )
-            return
+            return 0
 
     if amount > 0 and total_sold > 0:
         await interaction.followup.send(

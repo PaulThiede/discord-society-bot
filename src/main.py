@@ -33,7 +33,7 @@ from src.db.db_calls import (get_item, get_company, get_buy_orders, get_market_i
                              update_company_join_request, delete_company, \
                              update_government, update_government_gdp, update_market_item, update_player_item,
                              update_sell_order, delete_company_item, delete_buy_orders, add_object, delete_sell_orders, delete_join_requests, delete_player_item)
-from src.helper.defaults import get_default_market_item
+from src.helper.defaults import get_default_market_item, get_default_player
 from src.helper.item import add_company_item, add_player_item, has_player_item, use_item
 from src.helper.randoms import get_hunger_depletion, get_thirst_depletion
 from src.helper.transactions import add_owed_taxes
@@ -313,7 +313,6 @@ class CompanyGroup(app_commands.Group):
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
         
-        print("company_sell test 6")
 
         if player.hunger <= 0 or player.thirst <= 0:
             embed = discord.Embed(
@@ -332,8 +331,6 @@ class CompanyGroup(app_commands.Group):
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
-
-        print("company_sell test 7")
 
         try:
 
@@ -366,15 +363,14 @@ class CompanyGroup(app_commands.Group):
         except Exception as e:
             print(e)
 
-        print("company_sell test 8")
-
         # Bestehende SellOrder checken
         now = datetime.now()
         expires_at = now + BUY_ORDER_DURATION
 
-        existing_order = await get_own_sell_orders(user_id, server_id, item_tag, unit_price, is_company=True)
+        existing_orders = await get_own_sell_orders(user_id, server_id, item_tag, unit_price, is_company=True)
 
-        if existing_order:
+        if len(existing_orders) > 0:
+            existing_order = existing_orders[0]
             print("Merging orders")
             try:
                 existing_order.amount += amount
@@ -395,7 +391,6 @@ class CompanyGroup(app_commands.Group):
             except Exception as e:
                 print(e)
         
-        print("company_sell test 9")
 
 
 
@@ -471,8 +466,6 @@ class CompanyGroup(app_commands.Group):
                 await buyer_user.send(embed=embed)
             except discord.Forbidden:
                 pass
-
-        print("company_sell test 10")
 
         try:
 
@@ -555,7 +548,6 @@ class CompanyGroup(app_commands.Group):
         except Exception as e:
             print(e)
 
-        print("company_sell test 11")
 
     @app_commands.command(name="buy", description="Buy items from the market")
     @app_commands.describe(
@@ -631,11 +623,12 @@ class CompanyGroup(app_commands.Group):
         now = datetime.now()
         expires_at = now + BUY_ORDER_DURATION
 
-        existing_order = await get_own_buy_orders(user_id, server_id, item_tag, unit_price, is_company=True)
+        existing_orders = await get_own_buy_orders(user_id, server_id, item_tag, unit_price, is_company=True)
 
         print("company buy test 4")
 
-        if existing_order:
+        if len(existing_orders) > 0:
+            existing_order = existing_orders[0]
             existing_order.amount += amount
             existing_order.expires_at = expires_at
             await update_buy_order(existing_order)
@@ -702,18 +695,15 @@ class CompanyGroup(app_commands.Group):
                 await add_company_item(user_id, server_id, item_tag, match_amount)
                 await update_company(company)
 
-                print("company buy test 7.4")
 
                 if sell_order.is_company:
-                    print("company buy test 7a.5")
                     company_seller = await get_company(sell_order.user_id, server_id)
                     if company_seller:
                         company_seller.capital += total_price
                         await add_owed_taxes(user_id=company_seller.entrepreneur_id, server_id=server_id, amount=total_price, is_company=True)
-                        print("company buy test 7a.6")
+    
 
                     else:
-                        print("company buy test 7a.7")
                         await delete_sell_orders(sell_order.user_id, sell_order.server_id, sell_order.item_tag)
                         await interaction.followup.send(
                             embed=discord.Embed(
@@ -722,18 +712,13 @@ class CompanyGroup(app_commands.Group):
                                 color=discord.Color.orange()
                             )
                         )
-                        print("company buy test 7a.8")
                         continue
                 else:
-                    print("company buy test 7b.5")
                     seller = await get_player(sell_order.user_id, server_id)
-                    print("company buy test 7b.6")
                     if seller:
                         seller.money += total_price
-                        print("company buy test 7b.7")
                         await add_owed_taxes(user_id=seller.id, server_id=server_id,
                                             amount=total_price, is_company=False)
-                        print("company buy test 7b.8")
                         try:
                             user_obj = await interaction.client.fetch_user(sell_order.user_id)
                             await user_obj.send(embed=discord.Embed(
@@ -743,13 +728,10 @@ class CompanyGroup(app_commands.Group):
                             ))
                         except discord.Forbidden:
                             pass
-                print("company buy test 7.9")
                 if sell_order.amount == match_amount:
                     await delete_sell_orders(sell_order.user_id, sell_order.server_id, sell_order.item_tag)
-                    print("company buy test 7.10a")
                 else:
                     sell_order.amount -= match_amount
-                    print("company buy test 7.10b")
 
                 fulfilled_total += match_amount
                 total_spent += total_price
@@ -758,11 +740,7 @@ class CompanyGroup(app_commands.Group):
             except Exception as e:
                 print(e)
 
-            print("company buy test 8")
-
             await update_sell_order(sell_order)
-
-            print("company buy test 8.1")
 
             if amount == 0:
                 await interaction.followup.send(
@@ -783,7 +761,6 @@ class CompanyGroup(app_commands.Group):
                 )
             )
 
-        print("company buy test 9")
 
         # NPC-Markt?
         if amount > 0 and unit_price >= market_entry.max_price and market_entry.stockpile > 0:
@@ -1116,6 +1093,8 @@ class CompanyGroup(app_commands.Group):
         user_id = int(interaction.user.id)
         server_id = int(interaction.guild.id)
 
+        print("company_create test 1")
+
         # Player laden oder erstellen
         player = await get_player(user_id, server_id)
         if not player:
@@ -1131,6 +1110,8 @@ class CompanyGroup(app_commands.Group):
                 created_at=datetime.now()
             )
             await add_object(player, "Players")
+
+        print("company_create test 2")
             
         # Check: Hat bereits eine Firma?
         existing = await get_company(user_id, server_id)
@@ -1143,6 +1124,8 @@ class CompanyGroup(app_commands.Group):
                 ), ephemeral=True
             )
             return
+        
+        print("company_create test 3")
 
         # Check: Hat der Spieler bereits einen Job?
         if player.job:
@@ -1166,6 +1149,7 @@ class CompanyGroup(app_commands.Group):
             )
             return
 
+        print("company_create test 4")
 
 
         # Geld abziehen
@@ -1180,11 +1164,14 @@ class CompanyGroup(app_commands.Group):
             wage=100.0,
             producible_items="",  # optional später anpassen
             created_at=datetime.now(),
-            taxes_owed=0
+            taxes_owed=0,
+            worksteps=""
         )
         player.job = "Entrepreneur"
         await add_object(company, "Companies")
         await update_player(player)
+
+        print("company_create test 5")
 
         await interaction.followup.send(
             embed=discord.Embed(
@@ -1811,7 +1798,13 @@ async def gift(interaction: discord.Interaction, user: discord.Member, value: fl
             thirst=100,
             health=100,
             job="",
-            created_at=datetime.utcnow()
+            created_at=datetime.utcnow(),
+            company_entrepreneur_id=None,
+            taxes_owed=0,
+            work_cooldown_until=None,
+            job_switch_cooldown_until=None,
+            company_creation_cooldown_until=None,
+            gift_cooldown_until=None
         )
         await add_object(sender, "Players")
 
@@ -1926,11 +1919,11 @@ async def loan(interaction: discord.Interaction, value: int):
         )
         await add_object(player, "Players")
 
-    if player.debt >= 100_000:
+    if player.debt > 0:
         await interaction.followup.send(
             embed=discord.Embed(
                 title="Debt Limit Reached",
-                description="You already owe $100,000 or more. No more loans.",
+                description="You can't take out loans while you still have debt",
                 color=discord.Color.red()
             ), ephemeral=True
         )
@@ -3218,17 +3211,7 @@ class TaxCommandGroup(app_commands.Group):
         player = await get_player(user_id, server_id)
         if not player:
             # Standardwerte
-            player = Player(
-                id=user_id,
-                server_id=server_id,
-                money=100.0,
-                debt=0.0,
-                hunger=100,
-                thirst=100,
-                health=100,
-                job=None,
-                created_at=datetime.utcnow()
-            )
+            player = get_default_player()
             await add_object(player, "Players")
 
         company = await get_company(user_id, server_id)
@@ -3253,6 +3236,7 @@ class TaxCommandGroup(app_commands.Group):
             paid += pay
             amount -= pay
             msg += f"🏭 Paid ${pay:.2f} in company taxes.\n"
+            await update_company(company)
 
         if player.taxes_owed > 0 and amount > 0:
             pay = min(player.taxes_owed, player.money, amount)
@@ -3260,6 +3244,7 @@ class TaxCommandGroup(app_commands.Group):
             player.money -= pay
             paid += pay
             msg += f"🧍 Paid ${pay:.2f} in personal taxes."
+            await update_player(player)
 
         # ➕ Regierung laden und Geld in die Treasury
         gov = await get_government(server_id)
@@ -3277,7 +3262,6 @@ class TaxCommandGroup(app_commands.Group):
 
         gov.treasury += paid
 
-        await update_player(player)
         await update_government(gov)
 
         if paid == 0:
@@ -3543,6 +3527,7 @@ client.tree.add_command(OrderCommandGroup(), guild=guild_id)
 client.tree.add_command(CompanyGroup(), guild=guild_id)
 client.tree.add_command(TaxCommandGroup(), guild=guild_id)
 
+#client.run(TOKEN)
 
 @app.on_event("startup")
 async def startup_event():

@@ -2,7 +2,7 @@ from discord import Interaction, User, Member, Embed, Color
 
 from datetime import datetime
 
-from src.db.db_calls import get_item, get_player, get_own_buy_orders, get_market_item, get_all_items, get_sell_orders, add_object, update_buy_order, delete_sell_orders, update_sell_order, update_market_item
+from src.db.db_calls import get_item, get_player, get_own_buy_orders, get_market_item, get_all_items, get_sell_orders, add_object, update_player, update_buy_order, delete_sell_orders, update_sell_order, update_market_item
 from src.helper.defaults import get_default_player, get_default_market_item, get_default_buy_order
 from src.helper.item import add_player_item
 from src.config import BUY_ORDER_DURATION
@@ -18,6 +18,7 @@ async def buy(
 
     print(f"{interaction.user}: /buy item: {item}, unit_price: {unit_price}, amount: {amount}")
 
+
     if amount <= 0 or unit_price <= 0:
         await interaction.followup.send(
             embed=Embed(
@@ -30,6 +31,7 @@ async def buy(
 
     user_id = int(interaction.user.id)
     server_id = int(interaction.guild.id)
+
 
 
     item_tag = await check_item_exists(interaction, item)
@@ -98,9 +100,10 @@ async def check_existing_orders(interaction, user_id, server_id, item_tag, unit_
     now = datetime.now()
     expires_at = now + BUY_ORDER_DURATION
 
-    existing_order = await get_own_buy_orders(user_id, server_id, item_tag, unit_price, False)
+    existing_orders = await get_own_buy_orders(user_id, server_id, item_tag, unit_price, False)
 
-    if existing_order:
+    if len(existing_orders) > 0:
+        existing_order = existing_orders[0]
         existing_order.amount += amount
         existing_order.expires_at = expires_at
         await update_buy_order(existing_order)
@@ -170,7 +173,7 @@ async def handle_player_sell_orders(interaction, player, item_tag, unit_price, a
                     color=Color.green()
                 )
             )
-            return
+            return 0
 
     if fulfilled_total > 0:
         await interaction.followup.send(
@@ -205,6 +208,8 @@ async def buy_from_npc_market(interaction, player, market_item, amount):
 
     player.money -= total_price
     await add_player_item(player.id, player.server_id, market_item.item_tag, purchasable_amount)
+
+    await update_player(player)
     market_item.stockpile -= purchasable_amount
 
     await update_market_item(market_item)

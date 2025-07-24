@@ -808,9 +808,21 @@ async def get_all_own_buy_orders(user_id: int, server_id: int, now: datetime, is
         print(e)
 
 
-async def get_own_buy_orders(user_id: int, server_id: int, item_tag: str, unit_price: float, is_company=False):
+async def get_own_buy_orders(user_id: int, server_id: int, item_tag: str, unit_price: float, is_company):
     try:
-        response = (
+        if is_company == "both":
+
+            response = (
+            supabase.table("Buy_Orders")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("item_tag", item_tag)
+            .eq("server_id", server_id)
+            .eq("unit_price", unit_price)
+            .execute()
+        )
+        else:
+            response = (
             supabase.table("Buy_Orders")
             .select("*")
             .eq("user_id", user_id)
@@ -820,20 +832,19 @@ async def get_own_buy_orders(user_id: int, server_id: int, item_tag: str, unit_p
             .eq("is_company", is_company)
             .execute()
         )
-
-        if not response.data:
-            return None
-
-        entry = response.data[0]
-        return BuyOrder(
-            user_id=entry.get("user_id"),
-            item_tag=entry.get("item_tag"),
-            server_id=entry.get("server_id"),
-            amount=entry.get("amount"),
-            unit_price=entry.get("unit_price"),
-            expires_at=parse(entry.get("expires_at")) if isinstance(entry.get("expires_at"), str) else entry.get("expires_at"),
-            is_company=entry.get("is_company"),
-        )
+        
+        entries = []
+        for entry in response.data:
+            entries.append(BuyOrder(
+                user_id=entry.get("user_id"),
+                item_tag=entry.get("item_tag"),
+                server_id=entry.get("server_id"),
+                amount=entry.get("amount"),
+                unit_price=entry.get("unit_price"),
+                expires_at=parse(entry.get("expires_at")) if isinstance(entry.get("expires_at"), str) else entry.get("expires_at"),
+                is_company=entry.get("is_company"),
+            ))
+        return entries
     except Exception as e:
         print(e)
 
