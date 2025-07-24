@@ -18,7 +18,7 @@ async def execute_job(interaction: Interaction, job_name: str, job_items: List[s
 
     if not player:
         player = get_default_player(user_id, server_id)
-        add_object(player, "Players")
+        await add_object(player, "Players")
 
     if await check_if_employed(interaction, player, job_name): return
 

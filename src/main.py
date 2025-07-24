@@ -71,14 +71,14 @@ async def defer_response(interaction: discord.Interaction):
 
 @client.tree.command(name="ping", description="Shows the latency of the bot", guild=guild_id)
 async def init_ping(interaction: Interaction):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     await ping(interaction, client)
 
 
 
 @client.tree.command(name="items", description="Shows all the items and their base values", guild=guild_id)
 async def init_items(interaction: Interaction):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     await get_items(interaction)
 
 
@@ -89,7 +89,7 @@ async def init_items(interaction: Interaction):
 )
 @app_commands.describe(user="The stats of the user you wish to see the stats of")
 async def init_stats(interaction: Interaction, user: discord.User | discord.Member = None):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     await stats(interaction, user)
 
 
@@ -111,19 +111,19 @@ async def init_stats(interaction: Interaction, user: discord.User | discord.Memb
     app_commands.Choice(name="jobless", value="")  # Empty string means no job
 ])
 async def init_job(interaction: Interaction, job_type: app_commands.Choice[str]):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     await job(interaction, job_type)
 
 
 @client.tree.command(name="chop", description="Used by lumberjacks to chop down trees.", guild=guild_id)
 async def init_chop(interaction: Interaction):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     await chop(interaction)
 
 
 @client.tree.command(name="mine", description="Used by miners to mine resources.", guild=guild_id)
 async def init_mine(interaction: discord.Interaction):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     await mine(interaction)
 
 
@@ -136,25 +136,25 @@ async def init_mine(interaction: discord.Interaction):
     app_commands.Choice(name="leather", value="Leather"),
 ])
 async def init_farm(interaction: Interaction, item: app_commands.Choice[str] = None):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     await farm(interaction, item)
 
 
 @client.tree.command(name="harvest", description="Used by special jobs to harvest their unique resource.", guild=guild_id)
 async def init_harvest(interaction: Interaction):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     await harvest(interaction)
 
 
 @client.tree.command(name="drink", description="Consumes 1 water from your inventory and fills up your thirst bar.", guild=guild_id)
 async def init_drink(interaction: Interaction):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     await drink(interaction)
 
 
 @client.tree.command(name="eat", description="Consumes 1 grocery from your inventory and fills up your hunger bar.", guild=guild_id)
 async def init_eat(interaction: discord.Interaction):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     await eat(interaction)
 
 
@@ -170,7 +170,7 @@ async def init_eat(interaction: discord.Interaction):
     app_commands.Choice(name="fish", value="Fish")
 ])
 async def init_consume(interaction: discord.Interaction, item: app_commands.Choice[str]):
-   if await defer_response(interaction): return
+   await interaction.response.defer(thinking=True)
    await consume(interaction, item)
 
 
@@ -189,7 +189,7 @@ async def init_buy(
     item: str,
     unit_price: float,
     amount: int = 1):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     await buy(interaction, item, unit_price, amount)
 
 
@@ -208,7 +208,7 @@ async def init_sell(
     item: str,
     unit_price: float,
     amount: int = 1):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     await sell(interaction, item, unit_price, amount)
 
 # CommandGroup Definition
@@ -219,7 +219,7 @@ class OrderCommandGroup(app_commands.Group):
     @app_commands.command(name="view", description="View buy and sell orders")
     @app_commands.describe(user="(Optional) View orders of another user")
     async def init_view(self, interaction: discord.Interaction, user: discord.User | None = None):
-        if await defer_response(interaction): return
+        await interaction.response.defer(thinking=True)
         await order_view(interaction, user)
 
     @app_commands.command(name="remove", description="Remove one or multiple orders")
@@ -228,7 +228,7 @@ class OrderCommandGroup(app_commands.Group):
         price="(Optional) Only remove order at this exact price"
     )
     async def init_remove(self, interaction: discord.Interaction, item_tag: str, price: float | None = None):
-        if await defer_response(interaction): return
+        await interaction.response.defer(thinking=True)
         await order_remove(interaction, item_tag, price)
 
 class CompanyGroup(app_commands.Group):
@@ -248,7 +248,7 @@ class CompanyGroup(app_commands.Group):
             amount: int = 1
     ):
 
-        if await defer_response(interaction): return
+        await interaction.response.defer(thinking=True)
         print(f"{interaction.user}: /company sell item:{item}, unit_price:{unit_price}, amount:{amount}")
 
 
@@ -555,7 +555,7 @@ class CompanyGroup(app_commands.Group):
             unit_price: float,
             amount: int = 1
     ):
-        if await defer_response(interaction): return
+        await interaction.response.defer(thinking=True)
         print(f"{interaction.user}: /company buy item: {item}, unit_price: {unit_price}, amount: {amount}")
 
         if amount <= 0 or unit_price <= 0:
@@ -802,7 +802,7 @@ class CompanyGroup(app_commands.Group):
         description="View important info about your company."
     )
     async def info(self, interaction: discord.Interaction):
-        if await defer_response(interaction): return
+        await interaction.response.defer(thinking=True)
         print(f"{interaction.user}: /company info")
         
 
@@ -905,7 +905,7 @@ class CompanyGroup(app_commands.Group):
     @app_commands.command(name="deposit", description="Deposit money to the company account")
     @app_commands.describe(value="The amount of money you want to deposit")
     async def deposit(self, interaction: discord.Interaction, value: float):
-        if await defer_response(interaction): return
+        await interaction.response.defer(thinking=True)
         print(f"{interaction.user}: /company deposit {value}")
 
         if value <= 0:
@@ -978,7 +978,7 @@ class CompanyGroup(app_commands.Group):
     @app_commands.command(name="withdraw", description="Withdraw money from the company account")
     @app_commands.describe(value="The amount of money you want to withdraw")
     async def withdraw(self, interaction: discord.Interaction, value: float):
-        if await defer_response(interaction): return
+        await interaction.response.defer(thinking=True)
 
         if value <= 0:
             await interaction.followup.send(
@@ -1050,7 +1050,7 @@ class CompanyGroup(app_commands.Group):
     @app_commands.command(name="create", description="Create a company if you don't have a job. Costs $1000")
     @app_commands.describe(name="The name of the company you want to create")
     async def create(self, interaction: discord.Interaction, name: str):
-        if await defer_response(interaction): return
+        await interaction.response.defer(thinking=True)
         print(f"{interaction.user}: /company create {name}")
 
         user_id = int(interaction.user.id)
@@ -1137,7 +1137,7 @@ class CompanyGroup(app_commands.Group):
     @app_commands.command(name="disband", description="Disband your company (admins can disband others)")
     @app_commands.describe(user="The user whose company to disband (admins only)")
     async def disband(self, interaction: discord.Interaction, user: discord.Member | None = None):
-        if await defer_response(interaction): return
+        await interaction.response.defer(thinking=True)
         print(f"{interaction.user}: /company disband {user}")
 
         target_user = user or interaction.user
@@ -1229,7 +1229,7 @@ class CompanyGroup(app_commands.Group):
     item5="The fifth item you wish your company to produce"
 )
 async def setitems(interaction: discord.Interaction, item1: str, item2: str = "", item3: str = "", item4: str = "", item5: str = ""):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /setitems {item1} {item2} {item3} {item4} {item5}")
     user_id = int(interaction.user.id)
     server_id = int(interaction.guild.id)
@@ -1304,7 +1304,7 @@ async def setitems(interaction: discord.Interaction, item1: str, item2: str = ""
 )
 @app_commands.describe(item="The item you want to produce")
 async def work(interaction: discord.Interaction, item: str):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /work {item}")
 
     user_id = int(interaction.user.id)
@@ -1468,7 +1468,7 @@ async def work(interaction: discord.Interaction, item: str):
 )
 @app_commands.describe(user="The user who owns the company that you want to join")
 async def join(interaction: discord.Interaction, user: discord.Member):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /join {user}")
 
     requester_id = int(interaction.user.id)
@@ -1550,7 +1550,7 @@ async def join(interaction: discord.Interaction, user: discord.Member):
 )
 @app_commands.describe(user="The user you want to accept into your company")
 async def hire(interaction: discord.Interaction, user: discord.Member):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /hire {user}")
 
     entrepreneur_id = int(interaction.user.id)
@@ -1624,7 +1624,7 @@ async def hire(interaction: discord.Interaction, user: discord.Member):
 )
 @app_commands.describe(item="The item you want to see the info of")
 async def marketinfo(interaction: discord.Interaction, item: str):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /marketinfo {item}")
     server_id = int(interaction.guild.id)
 
@@ -1699,7 +1699,7 @@ async def marketinfo(interaction: discord.Interaction, item: str):
     value="The amount of money you want to gift"
 )
 async def gift(interaction: discord.Interaction, user: discord.Member, value: float):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /gift {user} {value}")
     if value <= 0:
         await interaction.followup.send(
@@ -1823,7 +1823,7 @@ async def gift(interaction: discord.Interaction, user: discord.Member, value: fl
     value="The amount of money you want to loan"
 )
 async def loan(interaction: discord.Interaction, value: int):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /loan {value}")
 
     if value <= 0:
@@ -1926,7 +1926,7 @@ async def loan(interaction: discord.Interaction, value: int):
     value="The amount of money you want to pay back"
 )
 async def paydebt(interaction: discord.Interaction, value: float):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /paydebt {value}")
 
     if value <= 0:
@@ -2008,7 +2008,7 @@ async def paydebt(interaction: discord.Interaction, value: float):
     value="The amount of money you want the user to have"
 )
 async def setmoney(interaction: discord.Interaction, user: discord.Member, value: float):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /setmoney {user} {value}")
 
     server_id = int(interaction.guild.id)
@@ -2090,7 +2090,7 @@ async def setmoney(interaction: discord.Interaction, user: discord.Member, value
     value="The amount of money you want to add to the user"
 )
 async def addmoney(interaction: discord.Interaction, user: discord.Member, value: float):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /addmoney {user} {value}")
 
     server_id = int(interaction.guild.id)
@@ -2171,7 +2171,7 @@ async def addmoney(interaction: discord.Interaction, user: discord.Member, value
     value="The stockpile you want the item to have"
 )
 async def setsupply(interaction: discord.Interaction, item: str, value: int):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /setsupply item:{item}, value:{value}")
 
     server_id = int(interaction.guild.id)
@@ -2248,7 +2248,7 @@ async def setsupply(interaction: discord.Interaction, item: str, value: int):
     max_price="The maximum price you want the item to have"
 )
 async def setprice(interaction: discord.Interaction, item: str, min_price: float, max_price: float):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /setprice item:{item}, min_price:{min_price}, max_price:{max_price}")
 
     server_id = int(interaction.guild.id)
@@ -2337,7 +2337,7 @@ async def setprice(interaction: discord.Interaction, item: str, min_price: float
     value="The amount of debt you want the user to have. Negative amounts are nullified."
 )
 async def setdebt(interaction: discord.Interaction, user: discord.Member, value: float):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /setdebt {user} {value}")
 
     server_id = int(interaction.guild.id)
@@ -2413,7 +2413,7 @@ from datetime import datetime
     value="The amount of debt you want to add to the user"
 )
 async def adddebt(interaction: discord.Interaction, user: discord.Member, value: float):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /adddebt {user} {value}")
 
     server_id = int(interaction.guild.id)
@@ -2490,7 +2490,7 @@ async def adddebt(interaction: discord.Interaction, user: discord.Member, value:
     amount="How many items are added to the user"
 )
 async def additem(interaction: discord.Interaction, user: discord.Member, item: str, amount: int = 1):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /additem user:{user} item:{item}, amount:{amount}")
 
     server_id = int(interaction.guild.id)
@@ -2577,7 +2577,7 @@ async def additem(interaction: discord.Interaction, user: discord.Member, item: 
     amount="How many items are removed from the user"
 )
 async def removeitem(interaction: discord.Interaction, user: discord.Member, item: str, amount: int = 1):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /removeitem user:{user}, item:{item}, amount:{amount}")
 
     server_id = int(interaction.guild.id)
@@ -2669,7 +2669,7 @@ async def removeitem(interaction: discord.Interaction, user: discord.Member, ite
     user="Which user will be bailouted."
 )
 async def bailout(interaction: discord.Interaction, user: discord.Member):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /bailout {user}")
 
     server_id = int(interaction.guild.id)
@@ -2826,7 +2826,7 @@ class LeaderboardView(View):
 # Slash Command
 @client.tree.command(name="leaderboard", description="Shows who owns the most networth.", guild = guild_id)
 async def leaderboard(interaction: Interaction):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /leaderboard")
 
     user_id = int(interaction.user.id)
@@ -2869,7 +2869,7 @@ async def leaderboard(interaction: Interaction):
 )
 @app_commands.describe(item="The item you want to see the ingredients of")
 async def ingredients(interaction: Interaction, item: str):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /ingredients {item}")
 
     server_id = int(interaction.guild.id)
@@ -2941,7 +2941,7 @@ async def ingredients(interaction: Interaction, item: str):
     buy_price="0 = min price, 1 = max price. Values in between = Buy Orders"
 )
 async def buymaterials(interaction: discord.Interaction, item: str, amount: int = 1, buy_price: float = 0.5):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /buymaterials item:{item}, amount:{amount}, buy_price:{buy_price}")
 
     if buy_price < 0 or buy_price > 1:
@@ -3114,7 +3114,7 @@ class TaxCommandGroup(app_commands.Group):
         super().__init__(name="tax", description="Different commands for managing taxes.")
     @app_commands.command(name="view", description="View all outstanding taxes")
     async def view(self, interaction: discord.Interaction):
-        if await defer_response(interaction): return
+        await interaction.response.defer(thinking=True)
         print(f"{interaction.user}: /tax view")
         
         server_id = interaction.guild.id
@@ -3147,7 +3147,7 @@ class TaxCommandGroup(app_commands.Group):
     @app_commands.command(name="pay", description="Pay your personal or company taxes")
     @app_commands.describe(amount="Amount to pay (optional)")
     async def pay(self, interaction: discord.Interaction, amount: float = None):
-        if await defer_response(interaction): return
+        await interaction.response.defer(thinking=True)
         print(f"{interaction.user}: /tax pay {amount}")
         server_id = interaction.guild.id
         user_id = interaction.user.id
@@ -3233,7 +3233,7 @@ class TaxCommandGroup(app_commands.Group):
     @app_commands.command(name="rate", description="Set the tax rate (governing role required)")
     @app_commands.describe(amount="New tax rate (0 to 1)")
     async def rate(self, interaction: discord.Interaction, amount: float):
-        if await defer_response(interaction): return
+        await interaction.response.defer(thinking=True)
         print(f"{interaction.user}: /tax rate {amount}")
         server_id = interaction.guild.id
         user_roles = [r.id for r in interaction.user.roles]
@@ -3280,7 +3280,7 @@ class TaxCommandGroup(app_commands.Group):
 @client.tree.command(name="government", description="Shows information about the current government.")
 @app_commands.guilds(guild_id)
 async def government(interaction: discord.Interaction):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
     server_id = interaction.guild.id
 
     gov = await get_government(server_id)
@@ -3416,7 +3416,7 @@ async def help_command(interaction: discord.Interaction):
     amount="The new wage (must be ≥ 0)"
 )
 async def wage(interaction: discord.Interaction, amount: float):
-    if await defer_response(interaction): return
+    await interaction.response.defer(thinking=True)
 
     user_id = int(interaction.user.id)
     server_id = int(interaction.guild.id)
