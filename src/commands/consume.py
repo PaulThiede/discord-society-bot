@@ -1,8 +1,6 @@
 from discord import Interaction, Embed, Color, app_commands
-from sqlalchemy import select
 
-from src.db.db import get_session
-from src.db.db_calls import get_player
+from src.db.db_calls import get_player, add_object, update_player
 from src.helper.defaults import get_default_player
 from src.helper.item import has_player_item, remove_player_item
 from src.commands.eat import eat
@@ -25,31 +23,29 @@ async def consume(interaction: Interaction, item: app_commands.Choice[str]):
         await eat(interaction)
         return
 
-    async for session in get_session():
-        player = await get_player(user_id, server_id)
+    player = await get_player(user_id, server_id)
 
-        if not player:
-            player = get_default_player(user_id, server_id)
-            session.add(player)
-            session.commit()
+    if not player:
+        player = get_default_player(user_id, server_id)
+        add_object(player, "Players")
 
-        if await check_if_bars_full(interaction, player): return
+    if await check_if_bars_full(interaction, player): return
 
-        if await check_has_fish(session, interaction, player): return
+    if await check_has_fish(interaction, player): return
 
-        await remove_player_item(session, user_id, server_id, "Fish", 1)
+    await remove_player_item(user_id, server_id, "Fish", 1)
 
-        player.thirst += 5
-        player.hunger += 15
+    player.thirst += 5
+    player.hunger += 15
 
-        await session.commit()
+    await update_player(player)
 
-        embed = Embed(
-            title="Success!",
-            description=f"You just consumed one fish! You now have {player.hunger}/100 hunger and {player.thirst}/100 thirst",
-            color=Color.green()
-        )
-        await interaction.followup.send(embed=embed)
+    embed = Embed(
+        title="Success!",
+        description=f"You just consumed one fish! You now have {player.hunger}/100 hunger and {player.thirst}/100 thirst",
+        color=Color.green()
+    )
+    await interaction.followup.send(embed=embed)
 
 async def check_if_bars_full(interaction, player):
     if player.thirst >= 100 and player.hunger >= 100:
@@ -62,8 +58,8 @@ async def check_if_bars_full(interaction, player):
         return True
     return False
 
-async def check_has_fish(session, interaction, player):
-    has_fish = await has_player_item(session, player.id, player.server_id, "Fish")
+async def check_has_fish(interaction, player):
+    has_fish = await has_player_item(player.id, player.server_id, "Fish")
     if not has_fish:
         embed = Embed(
             title="Error!",

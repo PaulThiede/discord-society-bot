@@ -1,13 +1,10 @@
 from discord import Interaction, Embed, Color
-from sqlalchemy import select
 
-from src.db.db import get_session
 from src.db.db_calls import get_all_items
 from src.helper.paginator import Paginator
 
 async def get_items(interaction: Interaction):
     print(f"{interaction.user}: /items")
-    await interaction.response.defer(thinking=True)
 
     items = await get_all_items()
 

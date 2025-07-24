@@ -15,12 +15,12 @@ class Player:
     thirst: int
     job: str
     health: int
-    company_entrepreneur_id: int
+    company_entrepreneur_id: Optional[int]
     taxes_owed: float
-    work_cooldown_until: datetime
-    job_switch_cooldown_until: datetime
-    company_creation_cooldown_until: datetime
-    gift_cooldown_until: datetime
+    work_cooldown_until: Optional[datetime]
+    job_switch_cooldown_until: Optional[datetime]
+    company_creation_cooldown_until: Optional[datetime]
+    gift_cooldown_until: Optional[datetime]
 
 @dataclass
 class Item:

@@ -2,32 +2,29 @@ from discord import Interaction, User, Member, Embed, Color, app_commands
 
 from datetime import datetime
 
-from src.db.db import get_session
-from src.db.db_calls import get_player
+from src.db.db_calls import get_player, add_object, update_player
 from src.helper.defaults import get_default_player
 from src.config import JOB_SWITCH_COOLDOWN
 
 async def job(interaction: Interaction, job_type: app_commands.Choice[str]):
     print(f"{interaction.user}: /job {job_type.value}")
-    await interaction.response.defer(thinking=True, ephemeral=False)
 
     user_id = int(interaction.user.id)
     server_id = int(interaction.guild.id)
 
-    async for session in get_session():
-        player = await get_player(user_id, server_id)
-        if not player:
-            player = get_default_player(user_id, server_id)
-            session.add(player)
+    player = await get_player(user_id, server_id)
+    if not player:
+        player = get_default_player(user_id, server_id)
+        add_object(player, "Players")
 
-        if await check_if_employed(interaction, player, job_type): return
+    if await check_if_employed(interaction, player, job_type): return
 
-        if await check_if_on_cooldown(interaction, player): return
+    if await check_if_on_cooldown(interaction, player): return
 
-        player.job = job_type.value
-        player.company_entrepreneur_id = None
+    player.job = job_type.value
+    player.company_entrepreneur_id = None
 
-        await session.commit()
+    await update_player(player)
 
     embed = create_job_embed(interaction, job_type)
     await interaction.followup.send(embed=embed)
@@ -38,6 +35,15 @@ async def check_if_employed(interaction, player, job_type):
         embed = Embed(
             title="Job Change Failed",
             description=f"❌ You already have the job **{job_type.value or 'jobless'}**.",
+            color=Color.red()
+        )
+        await interaction.followup.send(embed=embed, ephemeral=True)
+        return True
+    
+    if player.job == "Entrepreneur":
+        embed = Embed(
+            title="Job Change Failed",
+            description=f"❌ You are currently an entrepreneur. Please first disband your company with /company disband.",
             color=Color.red()
         )
         await interaction.followup.send(embed=embed, ephemeral=True)

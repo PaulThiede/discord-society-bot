@@ -1,33 +1,28 @@
 from discord import Interaction, User, Member, Embed, Color
-from sqlalchemy import select
 
-from src.db.db import get_session
-from src.db.db_calls import get_player, get_player_inventory
+from src.db.db_calls import get_player, get_player_inventory, add_object
 from src.helper.defaults import get_default_player
 from src.helper.embed_creators import create_inventory_embed
 
 
 async def stats(interaction: Interaction, user: User | Member = None):
     print(f"{interaction.user}: /stats: {user}")
-    await interaction.response.defer(thinking=True)
 
     target_user = user or interaction.user
     user_id = int(target_user.id)
     server_id = int(interaction.guild.id)
 
-    async for session in get_session():
-        player = await get_player(user_id, server_id)
+    player = await get_player(user_id, server_id)
 
-        if not player:
-            player = get_default_player(user_id, server_id)
-            session.add(player)
-            await session.commit()
+    if not player:
+        player = get_default_player(user_id, server_id)
+        add_object(player, "Players")
 
 
-        embed = create_stats_embed(target_user, player)
-        items = await get_player_inventory(user_id, server_id)
-        embed = create_inventory_embed(items, embed)
-        await interaction.followup.send(embed=embed)
+    embed = create_stats_embed(target_user, player)
+    items = await get_player_inventory(user_id, server_id)
+    embed = create_inventory_embed(items, embed)
+    await interaction.followup.send(embed=embed)
 
 
 def create_stats_embed(target_user, player):

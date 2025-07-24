@@ -1,6 +1,7 @@
 from datetime import datetime, date
 from dateutil.parser import parse
 from dataclasses import asdict
+from typing import Any
 
 from src.db.db import supabase
 from src.db.models import Player, PlayerItem, Item, CompanyItem, BuyOrder, MarketItem, SellOrder, Company, Government, \
@@ -114,6 +115,38 @@ async def get_company_item(user_id, server_id, item_tag):
     return None
 
 
+async def get_all_players(server_id):
+    response = (
+        supabase.table("Players")
+        .select("*")
+        .eq("server_id", server_id)
+        .execute()
+    )
+
+    players = []
+    for entry in response.data:
+        player = Player(
+            id=entry["id"],
+            server_id=entry["server_id"],
+            created_at=parse_datetime(entry["created_at"]),
+            money=entry["money"],
+            debt=entry["debt"],
+            hunger=entry["hunger"],
+            thirst=entry["thirst"],
+            job=entry["job"],
+            health=entry["health"],
+            company_entrepreneur_id=entry["company_entrepreneur_id"],
+            taxes_owed=entry["taxes_owed"],
+            work_cooldown_until=parse_datetime(entry["work_cooldown_until"]),
+            job_switch_cooldown_until=parse_datetime(entry["job_switch_cooldown_until"]),
+            company_creation_cooldown_until=parse_datetime(entry["company_creation_cooldown_until"]),
+            gift_cooldown_until=parse_datetime(entry["gift_cooldown_until"])
+        )
+        players.append(player)
+
+    return players
+
+
 async def get_player(user_id, server_id):
     response = (
         supabase.table("Players")
@@ -167,10 +200,10 @@ async def get_tax_owing_players(server_id):
             health=entry.get("health"),
             company_entrepreneur_id=entry.get("company_entrepreneur_id"),
             taxes_owed=entry.get("taxes_owed"),
-            work_cooldown_until=datetime.fromisoformat(entry.get("work_cooldown_until")),
-            job_switch_cooldown_until=datetime.fromisoformat(entry.get("job_switch_cooldown_until")),
-            company_creation_cooldown_until=datetime.fromisoformat(entry.get("company_creation_cooldown_until")),
-            gift_cooldown_until=datetime.fromisoformat(entry.get("gift_cooldown_until")),
+            work_cooldown_until=datetime.fromisoformat(str(entry.get("work_cooldown_until"))),
+            job_switch_cooldown_until=datetime.fromisoformat(str(entry.get("job_switch_cooldown_until"))),
+            company_creation_cooldown_until=datetime.fromisoformat(str(entry.get("company_creation_cooldown_until"))),
+            gift_cooldown_until=datetime.fromisoformat(str(entry.get("gift_cooldown_until"))),
         ))
 
     return players
@@ -189,7 +222,7 @@ async def get_tax_owing_companies(server_id):
         companies.append(Company(
             entrepreneur_id=entry.get("entrepreneur_id"),
             server_id=entry.get("server_id"),
-            created_at=datetime.fromisoformat(entry["created_at"]) if entry.get("created_at") else None,
+            created_at=datetime.fromisoformat(str(entry["created_at"])) if entry.get("created_at") else None,
             producible_items=entry.get("producible_items", ""),
             capital=entry.get("capital", 0),
             worksteps=entry.get("worksteps", 0),
@@ -214,7 +247,7 @@ async def get_employees(entrepreneur_id: int, server_id: int):
         players.append(Player(
             id=entry.get("id"),
             server_id=entry.get("server_id"),
-            created_at=datetime.fromisoformat(entry["created_at"]) if entry.get("created_at") else None,
+            created_at=datetime.fromisoformat(str(entry["created_at"])) if entry.get("created_at") else None,
             money=entry.get("money", 0),
             debt=entry.get("debt", 0),
             hunger=entry.get("hunger", 0),
@@ -223,10 +256,10 @@ async def get_employees(entrepreneur_id: int, server_id: int):
             health=entry.get("health", 100),
             company_entrepreneur_id=entry.get("company_entrepreneur_id"),
             taxes_owed=entry.get("taxes_owed", 0),
-            work_cooldown_until=datetime.fromisoformat(entry["work_cooldown_until"]) if entry.get("work_cooldown_until") else None,
-            job_switch_cooldown_until=datetime.fromisoformat(entry["job_switch_cooldown_until"]) if entry.get("job_switch_cooldown_until") else None,
-            company_creation_cooldown_until=datetime.fromisoformat(entry["company_creation_cooldown_until"]) if entry.get("company_creation_cooldown_until") else None,
-            gift_cooldown_until=datetime.fromisoformat(entry["gift_cooldown_until"]) if entry.get("gift_cooldown_until") else None,
+            work_cooldown_until=datetime.fromisoformat(str(entry["work_cooldown_until"])) if entry.get("work_cooldown_until") else None,
+            job_switch_cooldown_until=datetime.fromisoformat(str(entry["job_switch_cooldown_until"])) if entry.get("job_switch_cooldown_until") else None,
+            company_creation_cooldown_until=datetime.fromisoformat(str(entry["company_creation_cooldown_until"])) if entry.get("company_creation_cooldown_until") else None,
+            gift_cooldown_until=datetime.fromisoformat(str(entry["gift_cooldown_until"])) if entry.get("gift_cooldown_until") else None,
         ))
 
     return players
@@ -284,9 +317,34 @@ async def get_user_join_request(entrepreneur_id: int, server_id: int, user_id: i
     )
 
 
+async def get_all_companies(server_id):
+    response = (
+        supabase.table("Companies")
+        .select("*")
+        .eq("server_id", server_id)
+        .execute()
+    )
+
+    companies = []
+    for entry in response.data:
+        companies.append(Company(
+            entrepreneur_id=entry.get("entrepreneur_id"),
+            server_id=entry.get("server_id"),
+            created_at=datetime.fromisoformat(str(entry["created_at"])) if entry.get("created_at") else None,
+            producible_items=entry.get("producible_items", ""),
+            capital=entry.get("capital", 0),
+            worksteps=entry.get("worksteps", 0),
+            wage=entry.get("wage", 0),
+            name=entry.get("name", ""),
+            taxes_owed=entry.get("taxes_owed", 0),
+        ))
+
+    return companies
+
+
 async def get_company(user_id: int, server_id: int):
     response = (
-        supabase.table("Company")
+        supabase.table("Companies")
         .select("*")
         .eq("entrepreneur_id", user_id)
         .eq("server_id", server_id)
@@ -356,7 +414,7 @@ async def get_company_inventory(user_id: int, server_id: int):
 
 
 
-async def get_own_sell_orders(user_id: int, server_id: int, item_tag: str, unit_price: float, expires_at: datetime, is_company: bool = False):
+async def get_own_sell_orders(user_id: int, server_id: int, item_tag: str, unit_price: float, is_company: bool = False):
     response = (
         supabase.table("Sell_Orders")
         .select("*")
@@ -750,7 +808,7 @@ async def get_all_gdp_entries(server_id: int, date: datetime):
 
 
 async def delete_buy_orders(user_id, server_id, item_tag, price=None):
-    query = supabase.table("BuyOrders") \
+    query = supabase.table("Buy_Orders") \
         .delete() \
         .eq("user_id", user_id) \
         .eq("server_id", server_id) \
@@ -764,7 +822,7 @@ async def delete_buy_orders(user_id, server_id, item_tag, price=None):
 
 
 async def delete_sell_orders(user_id, server_id, item_tag, price=None):
-    query = supabase.table("SellOrders") \
+    query = supabase.table("Sell_Orders") \
         .delete() \
         .eq("user_id", user_id) \
         .eq("server_id", server_id) \
@@ -780,29 +838,45 @@ async def delete_sell_orders(user_id, server_id, item_tag, price=None):
 
 
 async def update_player(player: Player):
-    data = asdict(player)
-    pk = {"id": data.pop("id"), "server_id": data.pop("server_id")}
+
+    def serialize_value(value):
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+    
+
+    data = {k: serialize_value(v) for k, v in player.__dict__.items()}
+    
     response = (
         supabase.table("Players")
         .update(data)
-        .eq("id", pk["id"])
-        .eq("server_id", pk["server_id"])
+        .eq("id", player.id)
+        .eq("server_id", player.server_id)
         .execute()
     )
+
     return response.data
 
 
 
 async def update_company(company: Company):
-    data = asdict(company)
-    pk = {"entrepreneur_id": data.pop("entrepreneur_id"), "server_id": data.pop("server_id")}
+
+    def serialize_value(value):
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+    
+
+    data = {k: serialize_value(v) for k, v in company.__dict__.items()}
+    
     response = (
         supabase.table("Companies")
         .update(data)
-        .eq("entrepreneur_id", pk["entrepreneur_id"])
-        .eq("server_id", pk["server_id"])
+        .eq("entrepreneur_id", company.entrepreneur_id)
+        .eq("server_id", company.server_id)
         .execute()
     )
+
     return response.data
 
 
@@ -847,20 +921,34 @@ async def update_company_join_request(request: CompanyJoinRequest):
 
 
 async def update_government(gov: Government):
-    data = asdict(gov)
-    pk = {"id": data.pop("id")}
+    def serialize_value(value):
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+    
+
+    data = {k: serialize_value(v) for k, v in gov.__dict__.items()}
+    
     response = (
         supabase.table("Government")
         .update(data)
-        .eq("id", pk["id"])
+        .eq("id", gov.id)
         .execute()
     )
+
     return response.data
 
 
 
 async def update_government_gdp(gdp: GovernmentGDP):
-    data = asdict(gdp)
+    def serialize_value(value):
+        if isinstance(value, date):
+            return value.isoformat()
+        return value
+    
+
+    data = {k: serialize_value(v) for k, v in gdp.__dict__.items()}
+
     pk = {"server_id": data.pop("server_id"), "date": data.pop("date")}
     response = (
         supabase.table("Government_GDP")
@@ -907,7 +995,14 @@ async def update_player_item(item: PlayerItem):
 
 
 async def update_sell_order(order: SellOrder):
-    data = asdict(order)
+    def serialize_value(value):
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+    
+
+    data = {k: serialize_value(v) for k, v in order.__dict__.items()}
+
     pk = {
         "user_id": data.pop("user_id"),
         "server_id": data.pop("server_id"),
@@ -930,7 +1025,14 @@ async def update_sell_order(order: SellOrder):
 
 
 async def update_buy_order(order: BuyOrder):
-    data = asdict(order)
+    def serialize_value(value):
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+    
+
+    data = {k: serialize_value(v) for k, v in order.__dict__.items()}
+
     pk = {
         "user_id": data.pop("user_id"),
         "server_id": data.pop("server_id"),
@@ -965,6 +1067,29 @@ async def delete_company_item(company_entrepreneur_id: int, item_tag: str, serve
 
 
 
+async def delete_company(entrepreneur_id: int, server_id: int):
+    response = (
+        supabase.table("Companies")
+        .delete()
+        .eq("entrepreneur_id", entrepreneur_id)
+        .eq("server_id", server_id)
+        .execute()
+    )
+    return response.data
+
+
+async def delete_join_requests(company_entrepreneur_id: int, user_id: int, server_id: int):
+    response = (
+        supabase.table("Company_Join_Requests")
+        .delete()
+        .eq("company_entrepreneur_id", company_entrepreneur_id)
+        .eq("user_id", user_id)
+        .eq("server_id", server_id)
+        .execute()
+    )
+    return response.data
+
+
 async def delete_player_item(user_id: int, item_tag: str, server_id: int):
     response = (
         supabase.table("Player_Items")
@@ -980,8 +1105,11 @@ async def delete_player_item(user_id: int, item_tag: str, server_id: int):
 async def add_object(obj, table_name: str):
     response = (
         supabase.table(table_name)
-        .insert(obj.__dict__)
+        .insert(data)
         .execute()
     )
+
+    print(f"Added {obj} to {table_name}")
+
     return response.data
 

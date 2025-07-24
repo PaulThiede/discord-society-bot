@@ -15,10 +15,16 @@ def get_default_player(id, server_id):
             thirst=100,
             health=100,
             job=None,
-            created_at=datetime.datetime.utcnow()
+            created_at=datetime.datetime.utcnow(),
+            company_entrepreneur_id=None,
+            taxes_owed=0,
+            work_cooldown_until=None,
+            job_switch_cooldown_until=None,
+            company_creation_cooldown_until=None,
+            gift_cooldown_until=None
         )
 
-async def get_default_player_item(session, user_id, server_id, item_tag, amount=1):
+async def get_default_player_item(user_id, server_id, item_tag, amount=1):
     item = await get_item(item_tag)
     if not item:
         raise Exception(f"{item_tag} not found")
