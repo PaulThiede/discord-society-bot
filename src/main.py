@@ -1304,7 +1304,6 @@ async def setitems(interaction: discord.Interaction, item1: str, item2: str = ""
 )
 @app_commands.describe(item="The item you want to produce")
 async def work(interaction: discord.Interaction, item: str):
-    print(f"{interaction.user}: /work {item}", flush=True)
     await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /work {item}", flush=True)
 
@@ -1373,10 +1372,13 @@ async def work(interaction: discord.Interaction, item: str):
 
     company.capital -= company.wage
     player.money += company.wage
+    await update_player(player)
+    await update_company(company)
+    print("Test1", flush=True)
     await add_owed_taxes(user_id=player.id, server_id=server_id,
                             amount=company.wage, is_company=False)
 
-
+    print("Test2", flush=True)
     item_obj = await get_item(item)
     if not item_obj or not item_obj.producible:
         await interaction.followup.send(
@@ -1384,7 +1386,7 @@ async def work(interaction: discord.Interaction, item: str):
             ephemeral=True
         )
         return
-
+    print("Test3", flush=True)
     allowed_tags = company.producible_items.split(",") if company.producible_items else []
     worksteps_list = [int(x) for x in (company.worksteps.split(",") if company.worksteps else ["0"] * 5)]
 
@@ -1395,6 +1397,8 @@ async def work(interaction: discord.Interaction, item: str):
             color=discord.Color.red()
         ), ephemeral=True)
         return
+    
+    print("Test4", flush=True)
 
     item_index = allowed_tags.index(item)
 
