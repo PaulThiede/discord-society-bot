@@ -6,7 +6,6 @@ from src.helper.item import has_player_item, remove_player_item
 
 async def drink(interaction: Interaction, direct_execution = True):
     if direct_execution: print(f"{interaction.user}: /drink")
-    await interaction.response.defer(thinking=True)
     user_id = int(interaction.user.id)
     server_id = int(interaction.guild.id)
 

@@ -8,7 +8,6 @@ from src.helper.embed_creators import create_job_embed
 async def harvest(interaction):
     print(f"{interaction.user}: /harvest")
 
-    await interaction.response.defer(thinking=True)
 
     user_id = int(interaction.user.id)
     server_id = int(interaction.guild.id)
@@ -24,7 +23,7 @@ async def harvest(interaction):
     err_message = ""
     job_verb = "harvested"
 
-    if await check_if_employed(interaction, player, job_name): return
+    if await check_if_employed(interaction, player, "Special Job"): return
 
     job_items = [player.job[13]]
     resource_choices = [player.job[13:]]

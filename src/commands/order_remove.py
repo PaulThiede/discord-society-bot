@@ -8,7 +8,6 @@ from src.helper.item import add_company_item, add_player_item
 
 
 async def order_remove(interaction: Interaction, item_tag: str, price: float | None = None):
-    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /order remove item_tag:{item_tag}, price:{price}")
 
     user_id = int(interaction.user.id)

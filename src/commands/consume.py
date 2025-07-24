@@ -10,7 +10,6 @@ from src.commands.drink import drink
 async def consume(interaction: Interaction, item: app_commands.Choice[str]):
     print(f"{interaction.user}: /consume item:{item.value}")
 
-    await interaction.response.defer(thinking=True)
 
     user_id = int(interaction.user.id)
     server_id = int(interaction.guild.id)

@@ -6,7 +6,6 @@ from src.db.db_calls import get_all_own_buy_orders, get_all_own_sell_orders
 
 
 async def order_view(interaction: Interaction, user: User | None = None):
-    await interaction.response.defer(thinking=True)
     print(f"{interaction.user}: /order view user:{user}")
 
     target_user = user or interaction.user

@@ -4,7 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ee9efe83-f14b-493a-9e0f-44f64acfdc61" name="Changes" comment="" />
+    <list default="true" id="ee9efe83-f14b-493a-9e0f-44f64acfdc61" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/src/db/db_calls.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/db/db_calls.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/helper/transactions.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/helper/transactions.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.py" afterDir="false" />
+    </list>
     <list id="60c96bcf-1db9-4075-b6c5-39cbd329a695" name="Changes by Tim" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

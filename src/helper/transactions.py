@@ -85,13 +85,16 @@ async def transfer_money(interaction, order: BuyOrder | SellOrder, total_price,
 async def add_owed_taxes(user_id: int, server_id: int, amount: float, is_company: bool = False):
     if amount <= 0:
         return
+    
 
     await increase_gdp(server_id, amount)
+
 
     government = await get_government(server_id)
     if not government:
         government = get_default_government(server_id)
         await add_object(government, "Government")
+
 
     taxrate = government.taxrate or 0.0
     tax_amount = round(amount * taxrate, 2)
@@ -118,6 +121,7 @@ async def add_owed_taxes(user_id: int, server_id: int, amount: float, is_company
 
 
 
+
 async def increase_gdp(server_id: int, amount: float):
     today = date.today()
     gdp_entry = await get_gdp_entry(server_id, today)
@@ -126,7 +130,7 @@ async def increase_gdp(server_id: int, amount: float):
         await add_object(gdp_entry, "Government_GDP")
 
     gdp_entry.gdp_value += amount
-    update_government_gdp(gdp_entry)
+    await update_government_gdp(gdp_entry)
 
 async def increase_npc_price(market_item, amount):
     factor = 1 + 0.005 * amount

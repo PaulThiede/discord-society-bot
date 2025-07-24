@@ -1374,11 +1374,9 @@ async def work(interaction: discord.Interaction, item: str):
     player.money += company.wage
     await update_player(player)
     await update_company(company)
-    print("Test1", flush=True)
     await add_owed_taxes(user_id=player.id, server_id=server_id,
                             amount=company.wage, is_company=False)
-
-    print("Test2", flush=True)
+    
     item_obj = await get_item(item)
     if not item_obj or not item_obj.producible:
         await interaction.followup.send(
@@ -1386,7 +1384,6 @@ async def work(interaction: discord.Interaction, item: str):
             ephemeral=True
         )
         return
-    print("Test3", flush=True)
     allowed_tags = company.producible_items.split(",") if company.producible_items else []
     worksteps_list = [int(x) for x in (company.worksteps.split(",") if company.worksteps else ["0"] * 5)]
 
@@ -1398,7 +1395,6 @@ async def work(interaction: discord.Interaction, item: str):
         ), ephemeral=True)
         return
     
-    print("Test4", flush=True)
 
     item_index = allowed_tags.index(item)
 
@@ -3286,6 +3282,7 @@ class TaxCommandGroup(app_commands.Group):
 @app_commands.guilds(guild_id)
 async def government(interaction: discord.Interaction):
     await interaction.response.defer(thinking=True)
+    print(f"{interaction.user}: /government")
     server_id = interaction.guild.id
 
     gov = await get_government(server_id)
@@ -3307,16 +3304,22 @@ async def government(interaction: discord.Interaction):
     governing_role = discord.utils.get(guild.roles, id=gov.governing_role) if gov.governing_role else None
     admin_role = discord.utils.get(guild.roles, id=gov.admin_role) if gov.admin_role else None
 
-    embed = discord.Embed(
-        title="Government Overview",
-        color=discord.Color.yellow()
-    )
-    embed.add_field(name="📅 Created At", value=gov.created_at.strftime("%Y-%m-%d %H:%M UTC"), inline=False)
-    embed.add_field(name="💸 Tax Rate", value=f"{gov.taxrate * 100:.2f}%", inline=True)
-    embed.add_field(name="🏦 Interest Rate", value=f"{gov.interest_rate * 100:.2f}%", inline=True)
-    embed.add_field(name="💰 Treasury", value=f"${gov.treasury:,.2f}", inline=False)
-    embed.add_field(name="🎓 Governing Role", value=governing_role.mention if governing_role else "None", inline=True)
-    embed.add_field(name="🔧 Admin Role", value=admin_role.mention if admin_role else "None", inline=True)
+    try:
+
+        embed = discord.Embed(
+            title="Government Overview",
+            color=discord.Color.yellow()
+        )
+        dt = datetime.fromisoformat(gov.created_at)
+        embed.add_field(name="📅 Created At", value=dt.strftime("%d.%m.%Y %H:%M UTC"), inline=False)
+        embed.add_field(name="💸 Tax Rate", value=f"{gov.taxrate * 100:.2f}%", inline=True)
+        embed.add_field(name="🏦 Interest Rate", value=f"{gov.interest_rate * 100:.2f}%", inline=True)
+        embed.add_field(name="💰 Treasury", value=f"${gov.treasury:,.2f}", inline=False)
+        embed.add_field(name="🎓 Governing Role", value=governing_role.mention if governing_role else "None", inline=True)
+        embed.add_field(name="🔧 Admin Role", value=admin_role.mention if admin_role else "None", inline=True)
+
+    except Exception as e:
+        print(e)
 
     # GDP der letzten 7 Tage holen
     today = date.today()
@@ -3324,14 +3327,24 @@ async def government(interaction: discord.Interaction):
 
     gdp_entries = await get_all_gdp_entries(server_id, seven_days_ago)
 
-    if gdp_entries:
-        gdp_text = ""
-        for entry in gdp_entries:
-            day_label = "📅 Today" if entry.date == today else entry.date.strftime("%a %Y-%m-%d")
-            gdp_text += f"{day_label}: ${entry.gdp_value:,.2f}\n"
-        embed.add_field(name="📊 GDP (Last 7 Days)", value=gdp_text, inline=False)
+    try:
 
-    await interaction.followup.send(embed=embed)
+        if gdp_entries:
+            gdp_text = ""
+            for entry in gdp_entries:
+                entry_date = (
+                    datetime.fromisoformat(entry.date).date()
+                    if isinstance(entry.date, str)
+                    else entry.date
+                )
+                day_label = "📅 Today" if entry_date == today else entry_date.strftime("%d.%m.%Y")
+                gdp_text += f"{day_label}: ${entry.gdp_value:,.2f}\n"
+            embed.add_field(name="📊 GDP (Last 7 Days)", value=gdp_text, inline=False)
+
+        await interaction.followup.send(embed=embed)
+    
+    except Exception as e:
+        print(e)
 
 
 
