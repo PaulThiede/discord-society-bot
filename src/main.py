@@ -3502,9 +3502,9 @@ client.tree.add_command(OrderCommandGroup(), guild=guild_id)
 client.tree.add_command(CompanyGroup(), guild=guild_id)
 client.tree.add_command(TaxCommandGroup(), guild=guild_id)
 
-client.run(TOKEN)
+#client.run(TOKEN)
 
-#@app.on_event("startup")
-#async def startup_event():
-#    import asyncio
-#    asyncio.create_task(client.start(TOKEN))
+@app.on_event("startup")
+async def startup_event():
+    import asyncio
+    asyncio.create_task(client.start(TOKEN))
