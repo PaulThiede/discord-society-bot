@@ -52,17 +52,7 @@ async def buy(
     market_item = await get_market_item(server_id, item_tag)
 
     if unit_price == -1:
-        if market_item.stockpile < 0:
-            await interaction.followup.send(
-                embed=Embed(
-                    title="Error!",
-                    description=f"**{item_tag}** is out of stock.",
-                    color=Color.red()
-                ), ephemeral=True
-            )
-            return
-        await buy_from_npc_market(interaction, player, market_item, amount)
-        return
+        unit_price = market_item.max_price
 
     amount = await handle_player_sell_orders(interaction, player, item_tag, unit_price, amount)
 
@@ -71,9 +61,17 @@ async def buy(
 
 
     if amount > 0:
-        now = datetime.now()
-        new_order = get_default_buy_order(user_id, item_tag, server_id, amount, unit_price,
-                                            now + BUY_ORDER_DURATION, False)
+        if round(unit_price,2) >= round(market_item.max_price,2):
+            await interaction.followup.send(
+                embed=Embed(
+                    title="Error!",
+                    description=f"**{item_tag}** is out of stock.",
+                    color=Color.red()
+                )
+            )
+            return
+            
+        new_order = get_default_buy_order(user_id, item_tag, server_id, amount, unit_price, is_company=False)
         await add_object(new_order, "Buy_Orders")
 
         await interaction.followup.send(
@@ -110,7 +108,6 @@ async def check_enough_money(interaction, player, item_tag, unit_price, amount):
     return False
 
 async def check_existing_orders(interaction, user_id, server_id, item_tag, unit_price, amount):
-    now = datetime.now()
 
     existing_orders = await get_own_buy_orders(user_id, server_id, item_tag, unit_price, False)
 

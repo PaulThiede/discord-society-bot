@@ -246,15 +246,8 @@ class CompanyGroup(app_commands.Group):
             )
             return
         
-        if amount > 10:
-            await interaction.followup.send(
-                embed=discord.Embed(
-                    title="Error!",
-                    description="You may not sell more than 10 items at once.",
-                    color=discord.Color.red()
-                ), ephemeral=True
-            )
-            return
+
+        
 
         user_id = int(interaction.user.id)
         server_id = int(interaction.guild.id)
@@ -310,6 +303,22 @@ class CompanyGroup(app_commands.Group):
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
         
+        advantage_factor = 1
+        tool = None
+        if await has_player_item(player.id, server_id, "Calculator"):
+            advantage_factor = 3
+            tool = "Calculator"
+        
+        if amount > 10 * advantage_factor:
+            await interaction.followup.send(
+                embed=discord.Embed(
+                    title="Error!",
+                    description=f"You may not sell more than {10 * advantage_factor} items at once.",
+                    color=discord.Color.red()
+                ), ephemeral=True
+            )
+            return
+        
 
         if player.hunger <= 0 or player.thirst <= 0:
             embed = discord.Embed(
@@ -320,10 +329,10 @@ class CompanyGroup(app_commands.Group):
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
-        if player.hunger <= amount * 5 or player.thirst <= amount * 7.5:
+        if player.hunger <= amount * 5 / advantage_factor or player.thirst <= amount * 7.5 / advantage_factor:
             embed = discord.Embed(
                 title="Error!",
-                description=f"To sell {amount} items, you need at least {5 * amount} hunger and {7.5 * amount} thirst.",
+                description=f"To sell {amount} items, you need at least {ceil(5 * amount / advantage_factor)} hunger and {ceil(7.5 * amount / advantage_factor)} thirst.",
                 color=discord.Color.red()
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
@@ -352,10 +361,15 @@ class CompanyGroup(app_commands.Group):
         # Update hunger/thirst/cooldown
         old_hunger = player.hunger
         old_thirst = player.thirst
-        player.hunger = max(0, player.hunger - amount * get_hunger_depletion())
-        player.thirst = max(0, player.thirst - amount * get_thirst_depletion())
+        player.hunger = max(0, player.hunger - ceil(amount * get_hunger_depletion() / advantage_factor))
+        player.thirst = max(0, player.thirst - ceil(amount * get_thirst_depletion() / advantage_factor))
         player.work_cooldown_until = now + WORK_COOLDOWN
         await update_player(player)
+
+        durability = None
+
+        if tool == "Calculator":
+            durability = await use_item(player.id, server_id, "Calculator")
 
         # Markt initialisieren, falls nötig
         market_entry = await get_market_item(server_id, item_tag)
@@ -369,41 +383,10 @@ class CompanyGroup(app_commands.Group):
         market_entry = await get_market_item(server_id, item_tag)
 
         if unit_price == -1:
-            total_sold = 0
-            total_earned = 0.0
-            npc_sell_qty = amount
-            price = market_entry.min_price
-            total_price = round(npc_sell_qty * price, 2)
-
-            company.capital += total_price
-            await update_company(company)
-            market_entry.stockpile += npc_sell_qty
-            await add_owed_taxes(user_id=company.entrepreneur_id, server_id=server_id,
-                                amount=total_price, is_company=True)
-
-            total_sold += npc_sell_qty
-            total_earned += total_price
-            embed = discord.Embed(
-                title="NPC Market Sale",
-                description=(
-                    f"You sold **{npc_sell_qty}x {item_tag}** to the NPC market for **${price:.2f}** each (Total: **${total_price:.2f}**)."),
-                color=discord.Color.green()
-            )
-            embed.add_field(name="Hunger", value=f"{old_hunger} -> {player.hunger}")
-            embed.add_field(name="Thirst", value=f"{old_thirst} -> {player.thirst}")
-            await interaction.followup.send(embed=embed)
-
-            # Preis leicht senken
-            factor = 1 - (0.005 * npc_sell_qty)
-            market_entry.max_price = market_entry.max_price * factor, 2
-            market_entry.min_price = market_entry.min_price * factor, 2
-
-            await update_market_item(market_entry)
-            return
+           unit_price = market_entry.min_price 
 
 
         # Bestehende SellOrder checken
-        now = datetime.now()
 
         existing_orders = await get_own_sell_orders(user_id, server_id, item_tag, unit_price, is_company=True)
 
@@ -526,6 +509,8 @@ class CompanyGroup(app_commands.Group):
                         f"You sold **{npc_sell_qty}x {item_tag}** to the NPC market for **${price:.2f}** each (Total: **${total_price:.2f}**)."),
                     color=discord.Color.green()
                 )
+                if tool is not None:
+                    embed.add_field(name=f"{tool} Durability", value=f"{durability} -> {durability-1}")
                 embed.add_field(name="Hunger", value=f"{old_hunger} -> {player.hunger}")
                 embed.add_field(name="Thirst", value=f"{old_thirst} -> {player.thirst}")
                 await interaction.followup.send(embed=embed)
@@ -648,15 +633,7 @@ class CompanyGroup(app_commands.Group):
         market_entry = await get_market_item(server_id, item_tag)
 
         if unit_price == -1:
-            if market_entry.stockpile <= 0:
-                await interaction.followup.send(
-                    embed=discord.Embed(
-                        title="Error!",
-                        description=f"**{item_tag}** is out of stock.",
-                        color=discord.Color.red()
-                    ), ephemeral=True
-                )
-                return
+            unit_price = market_entry.max_price
         
 
             purchasable_amount = min(market_entry.stockpile, amount)
@@ -874,6 +851,14 @@ class CompanyGroup(app_commands.Group):
 
         # Nicht vollständig erfüllt → neue BuyOrder anlegen
         if amount > 0:
+            if round(unit_price,2) >= round(market_entry.max_price,2):
+                await interaction.followup.send(
+                    embed=discord.Embed(
+                        title="Error!",
+                        description=f"**{item_tag}** is out of stock.",
+                        color=discord.Color.red()
+                    )
+                )
             new_order = BuyOrder(
                 user_id=user_id,
                 item_tag=item_tag,
@@ -1733,18 +1718,25 @@ async def marketinfo(interaction: discord.Interaction, item: str):
     print(f"{interaction.user}: /marketinfo {item}")
     server_id = int(interaction.guild.id)
 
+    
+
     # MarketItem abrufen
-    market_entry = await get_market_item(server_id, item)
-    if not market_entry:
+    item_obj = await get_item(item)
+    if not item_obj:
         await interaction.followup.send(
             embed=discord.Embed(
                 title="Item Not Found",
-                description=f"The item **{item}** was not found in the market.",
+                description=f"The item **{item}** does not exist.",
                 color=discord.Color.red()
             ),
             ephemeral=True
         )
         return
+    
+    market_entry = await get_market_item(server_id, item_obj.item_tag)
+    if market_entry is None:
+        market_entry = get_default_market_item(item_obj, server_id)
+        await add_object(market_entry, "Market_Items")
 
     now = datetime.now()
 
@@ -3502,9 +3494,9 @@ client.tree.add_command(OrderCommandGroup(), guild=guild_id)
 client.tree.add_command(CompanyGroup(), guild=guild_id)
 client.tree.add_command(TaxCommandGroup(), guild=guild_id)
 
-#client.run(TOKEN)
+client.run(TOKEN)
 
-@app.on_event("startup")
-async def startup_event():
-    import asyncio
-    asyncio.create_task(client.start(TOKEN))
+#@app.on_event("startup")
+#async def startup_event():
+#    import asyncio
+#    asyncio.create_task(client.start(TOKEN))

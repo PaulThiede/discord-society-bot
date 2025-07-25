@@ -50,14 +50,12 @@ async def sell(
     market_item = await get_market_item(server_id, item_tag)
 
     if unit_price == -1:
-        await sell_to_npc_market(interaction, player, market_item, amount)
-        return
+        unit_price = market_item.min_price
 
     amount = await handle_player_buy_orders(interaction, player, item_tag, unit_price, amount)
 
     if amount > 0 and unit_price <= market_item.min_price:
         amount = await sell_to_npc_market(interaction, player, market_item, amount)
-
 
     if amount > 0:
         now = datetime.now()
@@ -100,15 +98,12 @@ async def has_enough_items(interaction, player, item_tag, amount):
     return True
 
 async def check_existing_orders(interaction, user_id, server_id, item_tag, unit_price, amount):
-    now = datetime.now()
-    expires_at = now + SELL_ORDER_DURATION
 
     existing_orders = await get_own_sell_orders(user_id, server_id, item_tag, unit_price, False)
 
     if len(existing_orders) > 0:
         existing_order = existing_orders[0]
         existing_order.amount += amount
-        existing_order.expires_at = expires_at
         await update_sell_order(existing_order)
 
         await interaction.followup.send(

@@ -65,7 +65,7 @@ async def get_tool(interaction, player, items, err_message):
     if not tool:
         await interaction.followup.send(embed=Embed(
             title="Error!",
-            description=err_message,
+            description=f"In order to use this command as a worker, you need at least a {items[0]}" if player.job == "Worker" else err_message,
             color=Color.red()
         ), ephemeral=True)
         return False

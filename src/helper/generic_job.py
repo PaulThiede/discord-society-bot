@@ -20,18 +20,13 @@ async def execute_job(interaction: Interaction, job_name: str, job_items: List[L
         player = get_default_player(user_id, server_id)
         await add_object(player, "Players")
 
-    print("test1")
-
     if await check_if_employed_multiple(interaction, player, [job_name, "Worker"]): return
 
     tool = await get_tool(interaction, player, job_items, err_message)
     if not tool: return
 
-    print("test2")
-
     if player.job == "Worker":
         company = await get_company(player.company_entrepreneur_id, server_id)
-        print("test3")
         if company.capital < company.wage:
             await interaction.followup.send(embed=Embed(
                 title="Not Enough Company Capital",
@@ -39,8 +34,7 @@ async def execute_job(interaction: Interaction, job_name: str, job_items: List[L
                 color=Color.red()
             ), ephemeral=True)
             return
-    
-    print("test4")
+
 
     old_hunger, old_thirst = await check_hunger_thirst_bar(interaction, player)
     if not old_hunger: return

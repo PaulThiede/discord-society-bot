@@ -492,21 +492,14 @@ async def get_own_sell_orders(user_id: int, server_id: int, item_tag: str, unit_
             ) 
         orders = []
         for entry in response.data:
-            # expires_at ist datetime, in DB meist String -> Vergleich nötig
-            entry_expires_at = entry.get("expires_at")
-            if entry_expires_at is not None:
-                # Falls string, in datetime konvertieren für Vergleich
-
-                db_expires_at = parse(entry_expires_at) if isinstance(entry_expires_at, str) else entry_expires_at
-                orders.append(SellOrder(
-                    user_id=entry.get("user_id"),
-                    item_tag=entry.get("item_tag"),
-                    server_id=entry.get("server_id"),
-                    amount=entry.get("amount"),
-                    unit_price=entry.get("unit_price"),
-                    expires_at=db_expires_at,
-                    is_company=entry.get("is_company"),
-                ))
+            orders.append(SellOrder(
+                user_id=entry.get("user_id"),
+                item_tag=entry.get("item_tag"),
+                server_id=entry.get("server_id"),
+                amount=entry.get("amount"),
+                unit_price=entry.get("unit_price"),
+                is_company=entry.get("is_company"),
+            ))
         return orders
     except Exception as e:
         print(e)
@@ -523,17 +516,6 @@ async def get_sell_orders(server_id: int, item_tag: str, unit_price: float, now:
             .execute()
         )
 
-        # Filtere abgelaufene SellOrders und sortiere nach unit_price aufsteigend
-        valid_orders = []
-        for entry in response.data:
-            expires_at_str = entry.get("expires_at")
-            if expires_at_str is None:
-                continue
-            expires_at = parse(expires_at_str) if isinstance(expires_at_str, str) else expires_at_str
-            if expires_at > now:
-                valid_orders.append(entry)
-
-        valid_orders.sort(key=lambda x: x["unit_price"])
 
         # Mappe zu SellOrder Objekten
         return [
@@ -543,10 +525,9 @@ async def get_sell_orders(server_id: int, item_tag: str, unit_price: float, now:
                 server_id=entry.get("server_id"),
                 amount=entry.get("amount"),
                 unit_price=entry.get("unit_price"),
-                expires_at=parse(entry.get("expires_at")) if isinstance(entry.get("expires_at"), str) else entry.get("expires_at"),
                 is_company=entry.get("is_company"),
             )
-            for entry in valid_orders
+            for entry in response.data
         ]
     except Exception as e:
         print(e)
@@ -561,16 +542,6 @@ async def get_item_sell_orders(server_id: int, item_tag: str, now: datetime):
             .execute()
         )
 
-        valid_orders = []
-        for entry in response.data:
-            expires_at_str = entry.get("expires_at")
-            if not expires_at_str:
-                continue
-            expires_at = parse(expires_at_str) if isinstance(expires_at_str, str) else expires_at_str
-            if expires_at > now:
-                valid_orders.append(entry)
-
-        valid_orders.sort(key=lambda x: x["unit_price"])
 
         return [
             SellOrder(
@@ -579,10 +550,9 @@ async def get_item_sell_orders(server_id: int, item_tag: str, now: datetime):
                 server_id=entry.get("server_id"),
                 amount=entry.get("amount"),
                 unit_price=entry.get("unit_price"),
-                expires_at=parse(entry.get("expires_at")) if isinstance(entry.get("expires_at"), str) else entry.get("expires_at"),
                 is_company=entry.get("is_company"),
             )
-            for entry in valid_orders
+            for entry in response.data
         ]
     except Exception as e:
         print(e)
@@ -609,16 +579,6 @@ async def get_all_own_sell_orders(user_id: int, server_id: int, now: datetime, i
                 .execute()
             )
 
-        valid_orders = []
-        for entry in response.data:
-            expires_at_str = entry.get("expires_at")
-            if not expires_at_str:
-                continue
-            expires_at = parse(expires_at_str) if isinstance(expires_at_str, str) else expires_at_str
-            if expires_at > now:
-                valid_orders.append(entry)
-
-        valid_orders.sort(key=lambda x: (x["item_tag"], x["unit_price"]))
 
         return [
             SellOrder(
@@ -627,10 +587,9 @@ async def get_all_own_sell_orders(user_id: int, server_id: int, now: datetime, i
                 server_id=entry.get("server_id"),
                 amount=entry.get("amount"),
                 unit_price=entry.get("unit_price"),
-                expires_at=parse(entry.get("expires_at")) if isinstance(entry.get("expires_at"), str) else entry.get("expires_at"),
                 is_company=entry.get("is_company"),
             )
-            for entry in valid_orders
+            for entry in response.data
         ]
     except Exception as e:
         print(e)
@@ -659,18 +618,6 @@ async def get_own_item_sell_orders(user_id: int, server_id: int, item_tag: str, 
                 .execute()
             )
 
-
-        valid_orders = []
-        for entry in response.data:
-            expires_at_str = entry.get("expires_at")
-            if not expires_at_str:
-                continue
-            expires_at = parse(expires_at_str) if isinstance(expires_at_str, str) else expires_at_str
-            if expires_at > now:
-                valid_orders.append(entry)
-
-        valid_orders.sort(key=lambda x: (x["item_tag"], x["unit_price"]))
-
         return [
             SellOrder(
                 user_id=entry.get("user_id"),
@@ -678,10 +625,9 @@ async def get_own_item_sell_orders(user_id: int, server_id: int, item_tag: str, 
                 server_id=entry.get("server_id"),
                 amount=entry.get("amount"),
                 unit_price=entry.get("unit_price"),
-                expires_at=parse(entry.get("expires_at")) if isinstance(entry.get("expires_at"), str) else entry.get("expires_at"),
                 is_company=entry.get("is_company"),
             )
-            for entry in valid_orders
+            for entry in response.data
         ]
     except Exception as e:
         print(e)
@@ -697,17 +643,6 @@ async def get_buy_orders(server_id: int, item_tag: str, unit_price: float, now: 
             .execute()
         )
 
-        valid_orders = []
-        for entry in response.data:
-            expires_at_str = entry.get("expires_at")
-            if not expires_at_str:
-                continue
-            expires_at = parse(expires_at_str) if isinstance(expires_at_str, str) else expires_at_str
-            if expires_at > now and entry.get("unit_price", 0) >= unit_price:
-                valid_orders.append(entry)
-
-        valid_orders.sort(key=lambda x: (x["item_tag"], x["unit_price"]))
-
         return [
             BuyOrder(
                 user_id=entry.get("user_id"),
@@ -715,10 +650,9 @@ async def get_buy_orders(server_id: int, item_tag: str, unit_price: float, now: 
                 server_id=entry.get("server_id"),
                 amount=entry.get("amount"),
                 unit_price=entry.get("unit_price"),
-                expires_at=parse(entry.get("expires_at")) if isinstance(entry.get("expires_at"), str) else entry.get("expires_at"),
                 is_company=entry.get("is_company"),
             )
-            for entry in valid_orders
+            for entry in response.data
         ]
     except Exception as e:
         print(e)
@@ -734,16 +668,6 @@ async def get_item_buy_orders(server_id: int, item_tag: str, now: datetime):
             .execute()
         )
 
-        valid_orders = []
-        for entry in response.data:
-            expires_at_str = entry.get("expires_at")
-            if not expires_at_str:
-                continue
-            expires_at = parse(expires_at_str) if isinstance(expires_at_str, str) else expires_at_str
-            if expires_at > now:
-                valid_orders.append(entry)
-
-        valid_orders.sort(key=lambda x: x["unit_price"])
 
         return [
             BuyOrder(
@@ -752,60 +676,45 @@ async def get_item_buy_orders(server_id: int, item_tag: str, now: datetime):
                 server_id=entry.get("server_id"),
                 amount=entry.get("amount"),
                 unit_price=entry.get("unit_price"),
-                expires_at=parse(entry.get("expires_at")) if isinstance(entry.get("expires_at"), str) else entry.get("expires_at"),
                 is_company=entry.get("is_company"),
             )
-            for entry in valid_orders
+            for entry in response.data
         ]
     except Exception as e:
         print(e)
 
 
 async def get_all_own_buy_orders(user_id: int, server_id: int, now: datetime, is_company):
-    try:
-        if is_company == "both":
-            response = (
-                supabase.table("Buy_Orders")
-                .select("*")
-                .eq("user_id", user_id)
-                .eq("server_id", server_id)
-                .execute()
-            )
-        else:
-            response = (
-                supabase.table("Buy_Orders")
-                .select("*")
-                .eq("user_id", user_id)
-                .eq("server_id", server_id)
-                .eq("is_company", is_company)
-                .execute()
-            )
+    if is_company == "both":
+        response = (
+            supabase.table("Buy_Orders")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("server_id", server_id)
+            .execute()
+        )
+    else:
+        response = (
+            supabase.table("Buy_Orders")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("server_id", server_id)
+            .eq("is_company", is_company)
+            .execute()
+        )
 
-        valid_orders = []
-        for entry in response.data:
-            expires_at_str = entry.get("expires_at")
-            if not expires_at_str:
-                continue
-            expires_at = parse(expires_at_str) if isinstance(expires_at_str, str) else expires_at_str
-            if expires_at > now:
-                valid_orders.append(entry)
+    orders = []
+    for entry in response.data:
+        orders.append(BuyOrder(
+            user_id=entry.get("user_id"),
+            item_tag=entry.get("item_tag"),
+            server_id=entry.get("server_id"),
+            amount=entry.get("amount"),
+            unit_price=entry.get("unit_price"),
+            is_company=entry.get("is_company"),
+        ))
 
-        valid_orders.sort(key=lambda x: (x["item_tag"], x["unit_price"]))
-
-        return [
-            BuyOrder(
-                user_id=entry.get("user_id"),
-                item_tag=entry.get("item_tag"),
-                server_id=entry.get("server_id"),
-                amount=entry.get("amount"),
-                unit_price=entry.get("unit_price"),
-                expires_at=parse(entry.get("expires_at")) if isinstance(entry.get("expires_at"), str) else entry.get("expires_at"),
-                is_company=entry.get("is_company"),
-            )
-            for entry in valid_orders
-        ]
-    except Exception as e:
-        print(e)
+    return orders
 
 
 async def get_own_buy_orders(user_id: int, server_id: int, item_tag: str, unit_price: float, is_company):
@@ -841,7 +750,6 @@ async def get_own_buy_orders(user_id: int, server_id: int, item_tag: str, unit_p
                 server_id=entry.get("server_id"),
                 amount=entry.get("amount"),
                 unit_price=entry.get("unit_price"),
-                expires_at=parse(entry.get("expires_at")) if isinstance(entry.get("expires_at"), str) else entry.get("expires_at"),
                 is_company=entry.get("is_company"),
             ))
         return entries
@@ -1301,9 +1209,6 @@ async def add_object(obj: Any, table_name: str):
 
         if isinstance(data.get("date"), date):
             data["date"] = data["date"].isoformat()
-
-        if isinstance(data.get("expires_at"), datetime):
-            data["expires_at"] = data["expires_at"].isoformat()
 
         if isinstance(data.get("created_at"), datetime):
             data["created_at"] = data["created_at"].isoformat()

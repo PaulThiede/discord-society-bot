@@ -30,13 +30,13 @@ def create_stats_embed(target_user, player):
         title=f"Stats for {target_user.display_name}",
         color=Color.yellow()
     )
-    embed.add_field(name="Money", value=f"{player.money:.2f}", inline=True)
-    embed.add_field(name="Debt", value=f"{player.debt:.2f}", inline=True)
+    embed.add_field(name="Money", value=f"${player.money:.2f}", inline=True)
+    embed.add_field(name="Debt", value=f"${player.debt:.2f}", inline=True)
     embed.add_field(name="Health", value=f"{player.health}", inline=True)
     embed.add_field(name="Hunger", value=f"{player.hunger}", inline=True)
     embed.add_field(name="Thirst", value=f"{player.thirst}", inline=True)
     embed.add_field(name="Job", value=player.job or "None", inline=True)
-    embed.add_field(name="Taxes Owed", value=f"{player.taxes_owed:.2f}", inline=True)
+    embed.add_field(name="Taxes Owed", value=f"${player.taxes_owed:.2f}", inline=True)
     embed.set_footer(text=f"User ID: {target_user.id}")
 
     return embed
