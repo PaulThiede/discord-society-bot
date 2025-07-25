@@ -12,14 +12,14 @@ from src.helper.transactions import transfer_money, increase_npc_price
 async def buy(
     interaction: Interaction,
     item: str,
-    unit_price: float,
+    unit_price: float = -1.0,
     amount: int = 1
 ):
 
     print(f"{interaction.user}: /buy item: {item}, unit_price: {unit_price}, amount: {amount}")
 
 
-    if amount <= 0 or unit_price <= 0:
+    if (amount <= 0 or unit_price <= 0) and unit_price != -1:
         await interaction.followup.send(
             embed=Embed(
                 title="Error!",
@@ -49,9 +49,22 @@ async def buy(
 
     await check_market_initialized(server_id, item_tag)
 
-    amount = await handle_player_sell_orders(interaction, player, item_tag, unit_price, amount)
-
     market_item = await get_market_item(server_id, item_tag)
+
+    if unit_price == -1:
+        if market_item.stockpile < 0:
+            await interaction.followup.send(
+                embed=Embed(
+                    title="Error!",
+                    description=f"**{item_tag}** is out of stock.",
+                    color=Color.red()
+                ), ephemeral=True
+            )
+            return
+        await buy_from_npc_market(interaction, player, market_item, amount)
+        return
+
+    amount = await handle_player_sell_orders(interaction, player, item_tag, unit_price, amount)
 
     if amount > 0 and unit_price >= market_item.max_price and market_item.stockpile > 0:
         amount = await buy_from_npc_market(interaction, player, market_item, amount)
@@ -137,13 +150,15 @@ async def handle_player_sell_orders(interaction, player, item_tag, unit_price, a
     sell_orders = await get_sell_orders(player.server_id, item_tag, unit_price, datetime.now())
 
     for sell_order in sell_orders:
-        if player.money < sell_order.unit_price:
+        if round(player.money,2) < round(sell_order.unit_price,2):
             break
+
+        print(f"Checking sell order for {item_tag} at ${sell_order.unit_price}")
 
         match_amount = min(amount, sell_order.amount)
         total_price = round(match_amount * sell_order.unit_price, 2)
 
-        if player.money < total_price:
+        if round(player.money,2) < total_price:
             match_amount = int(player.money // sell_order.unit_price)
             total_price = round(match_amount * sell_order.unit_price, 2)
 

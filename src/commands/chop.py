@@ -4,7 +4,7 @@ async def chop(interaction):
     print(f"{interaction.user}: /chop")
 
     job_name = "Lumberjack"
-    job_items = ["Axe", "Chainsaw"]
+    job_items = [["Axe", "Chainsaw"], ["Tree Felling Machine"]]
     err_message = "You don't have an axe or chainsaw! How do you expect to chop down trees without it?"
     resource_choices = ["Wood", "Rubber"]
     job_verb = "chopped"

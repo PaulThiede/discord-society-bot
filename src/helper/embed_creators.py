@@ -19,7 +19,7 @@ def create_inventory_embed(items, embed=Embed(title="")):
 def create_job_embed(player, resource, amount, durability, old_hunger, old_thirst, tool, job_verb):
     embed = Embed(
         title="Success!",
-        description=f"You just {job_verb} and gained {amount}x {resource}!",
+        description=f"You just {job_verb} " + ("for your company" if player.job == "Worker" else "") + f" and gained {amount}x {resource}!",
         color=Color.green()
     )
     if durability is not None: embed.add_field(name=f"{tool} Durability", value=f"{durability} -> {durability - 1}")

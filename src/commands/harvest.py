@@ -19,13 +19,12 @@ async def harvest(interaction):
         player = get_default_player(user_id, server_id)
         await add_object(player, "Players")
 
-    job_name = "Special Job: "
     err_message = ""
     job_verb = "harvested"
 
     if await check_if_employed(interaction, player, "Special Job"): return
 
-    job_items = [player.job[13]]
+    job_items = [["W"], ["Water Cleaning"]] if player.job[13] == "W" else [["N"], ["Gas Pipeline"]] if player.job[13] == "N" else [["P"], ["Oil Drilling Machine"]]
     resource_choices = [player.job[13:]]
 
     if await check_if_on_cooldown(interaction, player): return

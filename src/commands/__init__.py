@@ -13,3 +13,5 @@ from .buy import buy
 from .sell import sell
 from .order_view import order_view
 from .order_remove import order_remove
+from .subsidize import subsidize
+from .gambling.roulette import roulette

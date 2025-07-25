@@ -5,7 +5,16 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ee9efe83-f14b-493a-9e0f-44f64acfdc61" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/src/db/db_calls.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/db/db_calls.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/commands/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/commands/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/commands/buy.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/commands/buy.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/commands/chop.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/commands/chop.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/commands/farm.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/commands/farm.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/commands/harvest.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/commands/harvest.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/commands/mine.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/commands/mine.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/commands/sell.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/commands/sell.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/helper/embed_creators.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/helper/embed_creators.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/helper/generic_job.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/helper/generic_job.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/helper/player_checks.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/helper/player_checks.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/helper/transactions.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/helper/transactions.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.py" afterDir="false" />
     </list>

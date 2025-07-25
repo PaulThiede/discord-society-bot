@@ -4,7 +4,7 @@ async def farm(interaction, item_choice):
     print(f"{interaction.user}: /farm {item_choice}")
 
     job_name = "Farmer"
-    job_items = ["F", "Fertilizer", "Tractor"]
+    job_items = [["F", "Fertilizer", "Tractor"], ["Tractor"]]
     err_message = ""
     resource_choices = ["Grain", "Fish", "Leather", "Wool"] if item_choice is None else [item_choice.value]
     job_verb = "farmed"

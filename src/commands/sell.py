@@ -14,13 +14,12 @@ from src.helper.transactions import transfer_money, increase_npc_price, add_owed
 async def sell(
     interaction: Interaction,
     item: str,
-    unit_price: float,
+    unit_price: float = -1.0, # Used for when you just want to sell it at the npc price
     amount: int = 1
 ):
     print(f"{interaction.user}: /sell item: {item}, unit_price: {unit_price}, amount: {amount}")
 
-
-    if amount <= 0 or unit_price <= 0:
+    if (amount <= 0 or unit_price <= 0) and unit_price != -1:
         await interaction.followup.send(
             embed=Embed(
                 title="Error!",
@@ -48,11 +47,15 @@ async def sell(
 
     await check_market_initialized(server_id, item_tag)
 
-    amount = await handle_player_buy_orders(interaction, player, item_tag, unit_price, amount)
-
     market_item = await get_market_item(server_id, item_tag)
 
-    if amount > 0 and unit_price <= market_item.min_price and market_item.stockpile > 0:
+    if unit_price == -1:
+        await sell_to_npc_market(interaction, player, market_item, amount)
+        return
+
+    amount = await handle_player_buy_orders(interaction, player, item_tag, unit_price, amount)
+
+    if amount > 0 and unit_price <= market_item.min_price:
         amount = await sell_to_npc_market(interaction, player, market_item, amount)
 
 
@@ -138,7 +141,9 @@ async def handle_player_buy_orders(interaction, player, item_tag, unit_price, am
 
     for buy_order in buy_orders:
         buyer_user = await get_player(buy_order.user_id, buy_order.server_id)
-        buyer_money = buyer_user.money
+        buyer_money = round(buyer_user.money,2)
+
+        print(f"Checking buy order for {item_tag} at ${buy_order.unit_price}")
 
         if total_sold >= amount:
             break
@@ -150,8 +155,8 @@ async def handle_player_buy_orders(interaction, player, item_tag, unit_price, am
             continue
 
         if buyer_money < total_price:
-            match_amount = int(player.money // buy_order.unit_price)
-            total_price = round(match_amount * buy_order.unit_price, 2)
+            match_amount = int(round(player.money,2) // round(buy_order.unit_price,2))
+            total_price = round(match_amount * round(buy_order.unit_price,2), 2)
 
         if match_amount <= 0:
             break

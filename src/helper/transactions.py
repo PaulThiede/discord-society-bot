@@ -138,12 +138,12 @@ async def increase_gdp(server_id: int, amount: float):
 
 async def increase_npc_price(market_item, amount):
     factor = 1 + 0.005 * amount
-    market_item.min_price = round(market_item.min_price * factor, 2)
-    market_item.max_price = round(market_item.max_price * factor, 2)
+    market_item.min_price = market_item.min_price * factor
+    market_item.max_price = market_item.max_price * factor
     await update_market_item(market_item)
 
 async def decrease_npc_price(market_item, amount):
     factor = 1 - 0.005 * amount
-    market_item.min_price = round(market_item.min_price * factor, 2)
-    market_item.max_price = round(market_item.max_price * factor, 2)
+    market_item.min_price = market_item.min_price * factor
+    market_item.max_price = market_item.max_price * factor
     await update_market_item(market_item)

@@ -4,7 +4,7 @@ async def mine(interaction):
     print(f"{interaction.user}: /mine")
 
     job_name = "Miner"
-    job_items = ["Pickaxe"]
+    job_items = [["Pickaxe"], ["Mining Machine"]]
     err_message = "You don't have a pickaxe! How do you expect to mine resources without it?"
     resource_choices = ["Iron", "Minerals", "Coal", "Phosphorus"]
     job_verb = "mined"

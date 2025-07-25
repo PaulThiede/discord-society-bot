@@ -1,6 +1,7 @@
 from discord import Embed, Color
 
 from datetime import datetime
+from typing import List
 
 from src.db.db_calls import update_player
 from src.helper.item import has_player_item
@@ -12,6 +13,20 @@ async def check_if_employed(interaction, player, job):
         await interaction.followup.send(embed=Embed(
             title="Error!",
             description=f"You are not a {job}!",
+            color=Color.red()
+        ), ephemeral=True)
+        return True
+    return False
+
+async def check_if_employed_multiple(interaction, player, jobs: List[str]):
+    is_employed = False
+    for job in jobs:
+        if job in player.job:
+            is_employed = True
+    if not is_employed:
+        await interaction.followup.send(embed=Embed(
+            title="Error!",
+            description=f"You are not a {jobs[0]}!",
             color=Color.red()
         ), ephemeral=True)
         return True
@@ -34,6 +49,12 @@ async def check_if_on_cooldown(interaction, player):
     return False
 
 async def get_tool(interaction, player, items, err_message):
+    # Aufbau items: List[List[str]] -> the first sublist is for miners, lumberjacks, etc; the second sublist for workers
+    if player.job == "Worker":
+        items = items[1]
+    else:
+        items = items[0]
+
     tool = None
     for item in items:
         if item == "F" or item == "W" or item == "N" or item == "P":
