@@ -5,7 +5,7 @@ from datetime import date
 from src.db.db_calls import get_company, get_player, get_government, get_gdp_entry, add_object, update_player, \
     update_company, update_market_item, delete_sell_orders, delete_buy_orders, update_government_gdp
 from src.db.models import BuyOrder, SellOrder, Player, Company
-from src.helper.defaults import get_default_government, get_default_gdp_entry
+from src.helper.defaults import get_default_government, get_default_gdp_entry, get_default_player
 
 
 async def transfer_money(interaction, order: BuyOrder | SellOrder, total_price,
@@ -55,9 +55,13 @@ async def transfer_money(interaction, order: BuyOrder | SellOrder, total_price,
     if seller_type == "company":
         seller.capital += total_price
         await update_company(seller)
+        await add_owed_taxes(user_id=seller.entrepreneur_id, server_id=buyer.server_id,
+                         amount=total_price, is_company=True)
     else:
         seller.money += total_price
         await update_player(seller)
+        await add_owed_taxes(user_id=seller.id, server_id=buyer.server_id,
+                         amount=total_price, is_company=False)
 
     if buyer_type == "company":
         buyer.capital -= total_price
@@ -66,8 +70,7 @@ async def transfer_money(interaction, order: BuyOrder | SellOrder, total_price,
         buyer.money -= total_price
         await update_player(buyer)
     
-    await add_owed_taxes(user_id=seller.entrepreneur_id, server_id=buyer.server_id,
-                         amount=total_price, is_company=True if seller_type == "company" else False)
+    
 
     try:
         user_obj = await interaction.client.fetch_user(order.user_id)
@@ -83,6 +86,7 @@ async def transfer_money(interaction, order: BuyOrder | SellOrder, total_price,
 
 
 async def add_owed_taxes(user_id: int, server_id: int, amount: float, is_company: bool = False):
+    #print(f"Adding taxes for amount ${amount}")
     if amount <= 0:
         return
     
@@ -113,9 +117,9 @@ async def add_owed_taxes(user_id: int, server_id: int, amount: float, is_company
     else:
         player = await get_player(user_id, server_id)
         if not player:
-            return
+            player = get_default_player(user_id, server_id)
 
-        player.taxes_owed = (player.taxes_owed or 0) + tax_amount
+        player.taxes_owed += tax_amount
         await update_player(player)
 
 

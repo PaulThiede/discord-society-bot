@@ -996,7 +996,6 @@ async def update_player(player: Player):
                 return value.isoformat()
             return value
         
-
         data = {k: serialize_value(v) for k, v in player.__dict__.items()}
         
         response = (

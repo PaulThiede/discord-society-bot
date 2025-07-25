@@ -137,7 +137,7 @@ async def handle_player_buy_orders(interaction, player, item_tag, unit_price, am
     buy_orders = await get_buy_orders(player.server_id, item_tag, unit_price, datetime.now())
 
     for buy_order in buy_orders:
-        buyer_user = await interaction.client.fetch_user(buy_order.user_id)
+        buyer_user = await get_player(buy_order.user_id, buy_order.server_id)
         buyer_money = buyer_user.money
 
         if total_sold >= amount:
@@ -203,11 +203,12 @@ async def sell_to_npc_market(interaction, player, market_item, amount):
 
     player.money += total_price
     market_item.stockpile += amount
+    await update_player(player)
     
     await add_owed_taxes(user_id=player.id, server_id=player.server_id, amount=total_price, is_company=False)
     await remove_player_item(player.id, player.server_id, market_item.item_tag, amount)
 
-    await update_player(player)
+    
     await update_market_item(market_item)
 
     await interaction.followup.send(
