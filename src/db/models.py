@@ -79,7 +79,6 @@ class BuyOrder:
     server_id: int
     amount: int
     unit_price: float
-    expires_at: datetime
     is_company: bool
 
 @dataclass
@@ -89,7 +88,6 @@ class SellOrder:
     server_id: int
     amount: int
     unit_price: float
-    expires_at: datetime
     is_company: bool
 
 @dataclass
@@ -101,6 +99,7 @@ class Government:
     treasury: float
     governing_role: Optional[int]
     admin_role: Optional[int]
+    gambling_pool: float
 
 @dataclass
 class GovernmentGDP:

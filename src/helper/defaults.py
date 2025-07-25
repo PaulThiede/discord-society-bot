@@ -61,7 +61,8 @@ def get_default_government(server_id):
         interest_rate=0.3,
         treasury=0,
         governing_role=None,
-        admin_role=None
+        admin_role=None,
+        gambling_pool=0
     )
 
 def get_default_gdp_entry(server_id, date):
@@ -71,24 +72,22 @@ def get_default_gdp_entry(server_id, date):
         gdp_value=0.0
     )
 
-def get_default_buy_order(user_id, item_tag, server_id, amount, unit_price, expires_at, is_company):
+def get_default_buy_order(user_id, item_tag, server_id, amount, unit_price, is_company):
     return BuyOrder(
         user_id=user_id,
         item_tag=item_tag,
         server_id=server_id,
         amount=amount,
         unit_price=unit_price,
-        expires_at=expires_at,
         is_company=is_company
     )
 
-def get_default_sell_order(user_id, item_tag, server_id, amount, unit_price, expires_at, is_company):
+def get_default_sell_order(user_id, item_tag, server_id, amount, unit_price, is_company):
     return SellOrder(
         user_id=user_id,
         item_tag=item_tag,
         server_id=server_id,
         amount=amount,
         unit_price=unit_price,
-        expires_at=expires_at,
         is_company=is_company
     )

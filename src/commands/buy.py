@@ -111,14 +111,12 @@ async def check_enough_money(interaction, player, item_tag, unit_price, amount):
 
 async def check_existing_orders(interaction, user_id, server_id, item_tag, unit_price, amount):
     now = datetime.now()
-    expires_at = now + BUY_ORDER_DURATION
 
     existing_orders = await get_own_buy_orders(user_id, server_id, item_tag, unit_price, False)
 
     if len(existing_orders) > 0:
         existing_order = existing_orders[0]
         existing_order.amount += amount
-        existing_order.expires_at = expires_at
         await update_buy_order(existing_order)
 
         await interaction.followup.send(

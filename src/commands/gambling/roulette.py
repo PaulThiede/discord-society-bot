@@ -2,9 +2,10 @@ import random
 import discord
 from discord import app_commands
 from typing import Literal
+import asyncio
 
-from src.db.db_calls import get_player, update_player, add_object
-from src.helper.defaults import get_default_player
+from src.db.db_calls import get_player, update_player, add_object, get_government, update_government
+from src.helper.defaults import get_default_player, get_default_government
 
 # Real European roulette wheel order (37 fields)
 ROULETTE_WHEEL = [
@@ -29,10 +30,11 @@ def get_color(number: int) -> str:
 
 async def roulette(
     interaction: discord.Interaction,
-    color: Literal["red", "black"],
+    color: str,
     amount: int
 ):
-    await interaction.response.defer(ephemeral=False)
+
+    print(f"{interaction.user}: /roulette {color} {amount}")
 
     user = interaction.user
     server_id = interaction.guild.id
@@ -52,6 +54,31 @@ async def roulette(
             )
         )
         return
+    
+    if amount > 1000:
+        await interaction.followup.send(
+            embed=discord.Embed(
+                title="Invalid Amount",
+                description="You cannot gamble for more than $1000!",
+                color=discord.Color.red()
+            )
+        )
+        return
+    
+    gov = await get_government(server_id)
+    if not gov:
+        gov = get_default_government(server_id)
+        await add_object(gov, "Government")
+
+    if amount > gov.gambling_pool:
+        await interaction.followup.send(
+            embed=discord.Embed(
+                title="Invalid Amount",
+                description=f"The gambling pool only consists of ${gov.gambling_pool}, you cannot gamble for more!",
+                color=discord.Color.red()
+            )
+        )
+        return
 
     if player.money < amount:
         await interaction.followup.send(
@@ -62,6 +89,11 @@ async def roulette(
             )
         )
         return
+    
+    player.money -= amount
+    gov.gambling_pool += amount
+    await update_player(player)
+    await update_government(gov)
 
     # Animation: send initial spinning message
     wheel_message = await interaction.followup.send("🎲 Spinning the wheel...", wait=True)
@@ -77,22 +109,22 @@ async def roulette(
         history.append(f"{symbol} **{rolled}**")
         preview = " → ".join(history[-5:])  # Show last 5 rolls
         await wheel_message.edit(content=f"🎲 Ball rolling...\n{preview}")
-        await discord.utils.sleep_until(discord.utils.utcnow() + discord.utils.timedelta(milliseconds=500 + i * 70))
+        await asyncio.sleep(0.5 + i * 0.07)
 
     # Final result
     final_number = ROULETTE_WHEEL[(steps - 1) % len(ROULETTE_WHEEL)]
     final_color = get_color(final_number)
+    print(f"Final color: {final_color}. User chosen color: {color}")
 
-    win = (final_color == color)
-    if win:
-        player.money += amount
+    if final_color == color:
+        player.money += 2 * amount
+        gov.gambling_pool -= 2 * amount
         result_embed = discord.Embed(
             title="You Win!",
             description=f"The ball landed on **{final_color.upper()} {final_number}**.\nYou won **${amount}**!",
             color=discord.Color.green()
         )
     else:
-        player.money -= amount
         result_embed = discord.Embed(
             title="You Lose!",
             description=f"The ball landed on **{final_color.upper()} {final_number}**.\nYou lost **${amount}**.",
@@ -100,4 +132,5 @@ async def roulette(
         )
 
     await update_player(player)
+    await update_government(gov)
     await wheel_message.edit(content=None, embed=result_embed)

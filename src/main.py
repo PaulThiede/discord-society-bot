@@ -18,7 +18,7 @@ from datetime import timedelta, date
 from time import time
 
 
-from src.commands import ping, get_items, stats, job, chop, mine, farm, harvest, drink, eat, consume, buy, sell, subsidize, roulette
+from src.commands import ping, get_items, stats, job, chop, mine, farm, harvest, drink, eat, consume, buy, sell, subsidize, sponsor, roulette
 from src.db.models import Player, PlayerItem, Item, MarketItem, BuyOrder, SellOrder, Company, Government, CompanyItem, CompanyJoinRequest, GovernmentGDP
 from src.config import TOKEN, GUILD_ID, JOB_SWITCH_COOLDOWN, WORK_COOLDOWN, BUY_ORDER_DURATION, SELL_ORDER_DURATION, GIFT_COOLDOWN, PORT
 from src.commands import order_view, order_remove
@@ -33,7 +33,7 @@ from src.db.db_calls import (get_item, get_company, get_buy_orders, get_market_i
                              update_company_join_request, delete_company, \
                              update_government, update_government_gdp, update_market_item, update_player_item,
                              update_sell_order, delete_company_item, delete_buy_orders, add_object, delete_sell_orders, delete_join_requests, delete_player_item)
-from src.helper.defaults import get_default_market_item, get_default_player
+from src.helper.defaults import get_default_market_item, get_default_player, get_default_government
 from src.helper.item import add_company_item, add_player_item, has_player_item, use_item
 from src.helper.randoms import get_hunger_depletion, get_thirst_depletion
 from src.helper.transactions import add_owed_taxes
@@ -404,7 +404,6 @@ class CompanyGroup(app_commands.Group):
 
         # Bestehende SellOrder checken
         now = datetime.now()
-        expires_at = now + BUY_ORDER_DURATION
 
         existing_orders = await get_own_sell_orders(user_id, server_id, item_tag, unit_price, is_company=True)
 
@@ -412,7 +411,6 @@ class CompanyGroup(app_commands.Group):
             existing_order = existing_orders[0]
             print("Merging orders")
             existing_order.amount += amount
-            existing_order.expires_at = expires_at
             await update_sell_order(existing_order)
             embed = discord.Embed(
                 title="Company Sell Order Merged",
@@ -442,7 +440,7 @@ class CompanyGroup(app_commands.Group):
 
 
             sell_qty = min(buy_order.amount, amount - total_sold)
-            total_price = round(sell_qty * unit_price, 2)
+            total_price = sell_qty * unit_price
 
             # Validierung + Transaktion
             if buy_order.is_company:
@@ -472,7 +470,7 @@ class CompanyGroup(app_commands.Group):
 
                 if buyer.money < total_price:
                     sell_qty = int(buyer.money // unit_price)
-                    total_price = round(sell_qty * unit_price, 2)
+                    total_price = sell_qty * unit_price
 
                 if sell_qty <= 0:
                     continue
@@ -512,7 +510,7 @@ class CompanyGroup(app_commands.Group):
             if unit_price <= market_entry.min_price:
                 npc_sell_qty = remaining
                 price = market_entry.min_price
-                total_price = round(npc_sell_qty * price, 2)
+                total_price = npc_sell_qty * price
 
                 company.capital += total_price
                 await update_company(company)
@@ -549,7 +547,6 @@ class CompanyGroup(app_commands.Group):
                 server_id=server_id,
                 amount=rest,
                 unit_price=unit_price,
-                expires_at=expires_at,
                 is_company=True
             )
             await add_object(new_order, "Sell_Orders")
@@ -711,14 +708,12 @@ class CompanyGroup(app_commands.Group):
 
         # Bestehende BuyOrder checken
         now = datetime.now()
-        expires_at = now + BUY_ORDER_DURATION
 
         existing_orders = await get_own_buy_orders(user_id, server_id, item_tag, unit_price, is_company=True)
 
         if len(existing_orders) > 0:
             existing_order = existing_orders[0]
             existing_order.amount += amount
-            existing_order.expires_at = expires_at
             await update_buy_order(existing_order)
 
             await interaction.followup.send(
@@ -885,7 +880,6 @@ class CompanyGroup(app_commands.Group):
                 server_id=server_id,
                 amount=amount,
                 unit_price=unit_price,
-                expires_at=expires_at,
                 is_company=True
             )
             await add_object(new_order, "Buy_Order")
@@ -1260,15 +1254,7 @@ class CompanyGroup(app_commands.Group):
         if user:
             gov = await get_government(server_id)
             if not gov:
-                gov = Government(
-                    id=server_id,
-                    created_at=datetime.utcnow,
-                    taxrate=0.1,
-                    interest_rate=0.3,
-                    treasury=0,
-                    governing_role=None,
-                    admin_role=None
-                )
+                gov = get_default_government(server_id)
                 await add_object(gov, "Government")
 
             roles = [role.id for role in interaction.user.roles]
@@ -2003,15 +1989,7 @@ async def loan(interaction: discord.Interaction, value: int):
     # Zinsrate aus Government abfragen
     government = await get_government(server_id)
     if not government:
-        government = Government(
-            id=server_id,
-            created_at = datetime.utcnow,
-            taxrate = 0.1,
-            interest_rate = 0.3,
-            treasury = 0,
-            governing_role = None,
-            admin_role = None
-        )
+        government = get_default_government(server_id)
         await add_object(government, "Government")
 
     interest_rate = government.interest_rate or 0.30  # Fallback auf 30 %, falls None
@@ -2142,15 +2120,7 @@ async def setmoney(interaction: discord.Interaction, user: discord.Member, value
     # Check government
     gov = await get_government(server_id)
     if not gov:
-        gov = Government(
-            id=server_id,
-            created_at=datetime.utcnow,
-            taxrate=0.1,
-            interest_rate=0.3,
-            treasury=0,
-            governing_role=None,
-            admin_role=None
-        )
+        gov = get_default_government(server_id)
         await add_object(gov, "Government")
 
     # Check ONLY for admin_role
@@ -2224,15 +2194,7 @@ async def addmoney(interaction: discord.Interaction, user: discord.Member, value
 
     gov = await get_government(server_id)
     if not gov:
-        gov = Government(
-            id=server_id,
-            created_at=datetime.utcnow,
-            taxrate=0.1,
-            interest_rate=0.3,
-            treasury=0,
-            governing_role=None,
-            admin_role=None
-        )
+        gov = get_default_government(server_id)
         await add_object(gov, "Government")
 
     if gov.admin_role not in executor_roles:
@@ -2304,15 +2266,7 @@ async def setsupply(interaction: discord.Interaction, item: str, value: int):
 
     gov = await get_government(server_id)
     if not gov:
-        gov = Government(
-            id=server_id,
-            created_at=datetime.utcnow,
-            taxrate=0.1,
-            interest_rate=0.3,
-            treasury=0,
-            governing_role=None,
-            admin_role=None
-        )
+        gov = get_default_government(server_id)
         await add_object(gov, "Government")
 
     if gov.admin_role not in user_roles:
@@ -2402,15 +2356,7 @@ async def setprice(interaction: discord.Interaction, item: str, min_price: float
 
     gov = await get_government(server_id)
     if not gov:
-        gov = Government(
-            id=server_id,
-            created_at=datetime.utcnow,
-            taxrate=0.1,
-            interest_rate=0.3,
-            treasury=0,
-            governing_role=None,
-            admin_role=None
-        )
+        gov = get_default_government(server_id)
         await add_object(gov, "Government")
 
     if gov.admin_role not in user_roles:
@@ -2471,15 +2417,7 @@ async def setdebt(interaction: discord.Interaction, user: discord.Member, value:
 
     gov = await get_government(server_id)
     if not gov:
-        gov = Government(
-            id=server_id,
-            created_at=datetime.utcnow(),
-            taxrate=0.1,
-            interest_rate=0.3,
-            treasury=0,
-            governing_role=None,
-            admin_role=None
-        )
+        gov = get_default_government(server_id)
         await add_object(gov, "Government")
 
     if gov.admin_role not in user_roles:
@@ -2548,15 +2486,7 @@ async def adddebt(interaction: discord.Interaction, user: discord.Member, value:
     # Government prüfen und ggf. Default anlegen
     gov = await get_government(server_id)
     if not gov:
-        gov = Government(
-            id=server_id,
-            created_at=datetime.utcnow(),
-            taxrate=0.1,
-            interest_rate=0.3,
-            treasury=0,
-            governing_role=None,
-            admin_role=None
-        )
+        gov = get_default_government(server_id)
         await add_object(gov, "Government")
 
     # Rechte prüfen
@@ -2625,15 +2555,7 @@ async def additem(interaction: discord.Interaction, user: discord.Member, item: 
     # Government prüfen und ggf. anlegen
     gov = await get_government(server_id)
     if not gov:
-        gov = Government(
-            id=server_id,
-            created_at=datetime.utcnow(),
-            taxrate=0.1,
-            interest_rate=0.3,
-            treasury=0,
-            governing_role=None,
-            admin_role=None
-        )
+        gov = get_default_government(server_id)
         await add_object(gov, "Government")
 
     # Rechte prüfen (Adminrolle)
@@ -2712,15 +2634,7 @@ async def removeitem(interaction: discord.Interaction, user: discord.Member, ite
     # Government prüfen und ggf. anlegen
     gov = await get_government(server_id)
     if not gov:
-        gov = Government(
-            id=server_id,
-            created_at=datetime.utcnow(),
-            taxrate=0.1,
-            interest_rate=0.3,
-            treasury=0,
-            governing_role=None,
-            admin_role=None
-        )
+        gov = get_default_government(server_id)
         await add_object(gov, "Government")
 
     # Rechte prüfen (Adminrolle)
@@ -2804,15 +2718,7 @@ async def bailout(interaction: discord.Interaction, user: discord.Member):
     # Government laden oder erstellen
     gov = await get_government(server_id)
     if not gov:
-        gov = Government(
-            id=server_id,
-            created_at=datetime.utcnow(),
-            taxrate=0.1,
-            interest_rate=0.3,
-            treasury=0,
-            governing_role=None,
-            admin_role=None
-        )
+        gov = get_default_government(server_id)
         await add_object(gov, "Government")
 
     # Rollenprüfung
@@ -3164,7 +3070,6 @@ async def buymaterials(interaction: discord.Interaction, item: str, amount: int 
                     unit_price=unit_price,
                     amount=qty,
                     is_company=True,
-                    expires_at=datetime.utcnow() + BUY_ORDER_DURATION
                 )
                 await add_object(new_order, "Buy_Orders")
                 buy_orders_created.append((tag, qty, unit_price))
@@ -3322,15 +3227,7 @@ class TaxCommandGroup(app_commands.Group):
         # ➕ Regierung laden und Geld in die Treasury
         gov = await get_government(server_id)
         if not gov:
-            gov = Government(
-                id=server_id,
-                created_at=datetime.utcnow(),
-                taxrate=0.1,
-                interest_rate=0.3,
-                treasury=0,
-                governing_role=None,
-                admin_role=None
-            )
+            gov = get_default_government(server_id)
             await add_object(government, "Government")
 
         gov.treasury += paid
@@ -3360,15 +3257,7 @@ class TaxCommandGroup(app_commands.Group):
 
         gov = await get_government(server_id)
         if not gov:
-            gov = Government(
-                id=server_id,
-                created_at=datetime.utcnow(),
-                taxrate=0.1,
-                interest_rate=0.3,
-                treasury=0,
-                governing_role=None,
-                admin_role=None
-            )
+            gov = get_default_government(server_id)
             await add_object(gov, "Government")
 
         if gov.governing_role not in user_roles:
@@ -3407,15 +3296,7 @@ async def government(interaction: discord.Interaction):
     gov = await get_government(server_id)
 
     if not gov:
-        gov = Government(
-            id=server_id,
-            created_at=datetime.utcnow(),
-            taxrate=0.1,
-            interest_rate=0.3,
-            treasury=0,
-            governing_role=None,
-            admin_role=None
-        )
+        gov = get_default_government(server_id)
         await add_object(gov, "Government")
 
     # Rollen auflösen
@@ -3432,6 +3313,7 @@ async def government(interaction: discord.Interaction):
     embed.add_field(name="💸 Tax Rate", value=f"{gov.taxrate * 100:.2f}%", inline=True)
     embed.add_field(name="🏦 Interest Rate", value=f"{gov.interest_rate * 100:.2f}%", inline=True)
     embed.add_field(name="💰 Treasury", value=f"${gov.treasury:,.2f}", inline=False)
+    embed.add_field(name="🎲 Gambling Pool", value=f"${gov.gambling_pool:,.2f}", inline=False)
     embed.add_field(name="🎓 Governing Role", value=governing_role.mention if governing_role else "None", inline=True)
     embed.add_field(name="🔧 Admin Role", value=admin_role.mention if admin_role else "None", inline=True)
 
@@ -3594,6 +3476,12 @@ async def init_subsidize(interaction: discord.Interaction, user: discord.User | 
     await interaction.response.defer(thinking=True)
     await subsidize(interaction, user, amount)
 
+@client.tree.command(name="sponsor", description="Used by government officials to sponsor gambling", guild=guild_id)
+@app_commands.describe(amount="The amount of money you want to put into the gambling pool.")
+async def init_sponsor(interaction: discord.Interaction, amount: int):
+    await interaction.response.defer(thinking=True)
+    await sponsor(interaction, amount)
+
 
 @client.tree.command(name="roulette", description="Bet money on red or black!", guild=guild_id)
 @app_commands.describe(
@@ -3601,12 +3489,12 @@ async def init_subsidize(interaction: discord.Interaction, user: discord.User | 
     amount="How much do you want to bet?"
 )
 @app_commands.choices(color=[
-    app_commands.Choice(name="Red", value="red"),
-    app_commands.Choice(name="Black", value="black"),
+    app_commands.Choice(name="red", value="red"),
+    app_commands.Choice(name="black", value="black"),
 ])
 async def init_roulette(interaction: discord.Interaction, color: app_commands.Choice[str], amount: float):
     await interaction.response.defer(thinking=True)
-    await roulette(interaction, color, amount)
+    await roulette(interaction, color.value, amount)
 
 
 # Registrierung

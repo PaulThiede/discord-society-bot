@@ -895,6 +895,7 @@ async def get_government(server_id: int):
             treasury=entry.get("treasury"),
             governing_role=entry.get("governing_role"),
             admin_role=entry.get("admin_role"),
+            gambling_pool=entry.get("gambling_pool")
         )
     except Exception as e:
         print(e)
@@ -1130,19 +1131,16 @@ async def update_government_gdp(gdp: GovernmentGDP):
 
 
 async def update_market_item(item: MarketItem):
-    try:
-        data = asdict(item)
-        pk = {"item_tag": data.pop("item_tag"), "server_id": data.pop("server_id")}
-        response = (
-            supabase.table("Market_Items")
-            .update(data)
-            .eq("item_tag", pk["item_tag"])
-            .eq("server_id", pk["server_id"])
-            .execute()
-        )
-        return response.data
-    except Exception as e:
-        print(e)
+    data = asdict(item)
+    pk = {"item_tag": data.pop("item_tag"), "server_id": data.pop("server_id")}
+    response = (
+        supabase.table("Market_Items")
+        .update(data)
+        .eq("item_tag", pk["item_tag"])
+        .eq("server_id", pk["server_id"])
+        .execute()
+    )
+    return response.data
 
 
 
