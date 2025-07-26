@@ -1272,6 +1272,7 @@ class CompanyGroup(app_commands.Group):
             player.job = ""
 
         player.money += company.capital
+        await update_player(player)
 
         # CompanyItems übertragen
         company_items = await get_company_inventory(target_user_id, server_id)
