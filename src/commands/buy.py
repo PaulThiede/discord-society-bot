@@ -5,7 +5,6 @@ from datetime import datetime
 from src.db.db_calls import get_item, get_player, get_own_buy_orders, get_market_item, get_all_items, get_sell_orders, add_object, update_player, update_buy_order, delete_sell_orders, update_sell_order, update_market_item
 from src.helper.defaults import get_default_player, get_default_market_item, get_default_buy_order
 from src.helper.item import add_player_item
-from src.config import BUY_ORDER_DURATION
 from src.helper.transactions import transfer_money, increase_npc_price
 
 

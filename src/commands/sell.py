@@ -7,7 +7,6 @@ from src.db.db_calls import get_item, get_player, get_own_buy_orders, get_market
 from src.helper.defaults import get_default_player, get_default_market_item, get_default_buy_order, \
     get_default_sell_order
 from src.helper.item import add_player_item, remove_player_item
-from src.config import SELL_ORDER_DURATION
 from src.helper.transactions import transfer_money, increase_npc_price, add_owed_taxes
 
 
@@ -58,9 +57,7 @@ async def sell(
         amount = await sell_to_npc_market(interaction, player, market_item, amount)
 
     if amount > 0:
-        now = datetime.now()
-        new_order = get_default_sell_order(user_id, item_tag, server_id, amount, unit_price,
-                                            now + SELL_ORDER_DURATION, False)
+        new_order = get_default_sell_order(user_id, item_tag, server_id, amount, unit_price, is_company=False)
         await add_object(new_order, "Sell_Orders")
 
         await interaction.followup.send(

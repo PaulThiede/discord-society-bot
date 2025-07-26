@@ -1,11 +1,12 @@
-from typing import List
-
 from discord import Interaction, Embed, Color
+
+from typing import List
+from random import randint
 
 from src.db.db_calls import get_player, add_object, get_company, update_player, update_company
 from src.helper.defaults import get_default_player
 from src.helper.player_checks import check_if_employed_multiple, check_if_on_cooldown, get_tool, check_hunger_thirst_bar
-from src.helper.randoms import generate_resources
+from src.helper.randoms import generate_resources, generate_rare_resources
 from src.helper.item import use_item, add_player_item, add_company_item
 from src.helper.embed_creators import create_job_embed
 from src.helper.transactions import add_owed_taxes
@@ -41,7 +42,15 @@ async def execute_job(interaction: Interaction, job_name: str, job_items: List[L
 
     if await check_if_on_cooldown(interaction, player): return
 
-    resource, amount = generate_resources(resource_choices, tool)
+    resource, amount = None, None
+    if player.job == "Miner":
+        rng = randint(1,10)
+        if rng == 1:
+            resource, amount = generate_rare_resources(["Gold", "Diamond"], tool)
+        else:
+            resource, amount = generate_resources(resource_choices, tool)
+    else:
+        resource, amount = generate_resources(resource_choices, tool)
 
     durability = await use_item(user_id, server_id, tool)
 

@@ -39,6 +39,21 @@ def generate_resources(choices: List[str], tool) -> Tuple:
 
     return resource_type, amount
 
+def generate_rare_resources(choices: List[str], tool):
+    resource_type = choice(choices)
+
+    ### MINER ###
+    if tool == "Pickaxe":
+        amount = 1
+    elif tool == "Mining Machine":
+        amount = randint(1, 3) if resource_type == "Gold" else  randint(1, 2) # Diamond
+
+    else:
+        raise Exception(f"{tool} is not accounted for in generate_resources()")
+    
+    return resource_type, amount
+
+
 def get_hunger_depletion():
     return randint(2,8)
 

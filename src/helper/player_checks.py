@@ -19,6 +19,13 @@ async def check_if_employed(interaction, player, job):
     return False
 
 async def check_if_employed_multiple(interaction, player, jobs: List[str]):
+    if player.job is None:
+        await interaction.followup.send(embed=Embed(
+            title="Error!",
+            description=f"You have no job. Use /job to get one!",
+            color=Color.red()
+        ), ephemeral=True)
+        return True
     is_employed = False
     for job in jobs:
         if job in player.job:
@@ -78,7 +85,7 @@ async def check_hunger_thirst_bar(interaction, player):
             description="You are too hungry to work!",
             color=Color.red()
         ), ephemeral=True)
-        return True
+        return True, True
 
     if player.thirst <= 0:
         await interaction.followup.send(embed=Embed(

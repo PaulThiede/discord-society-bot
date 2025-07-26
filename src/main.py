@@ -308,6 +308,7 @@ class CompanyGroup(app_commands.Group):
         if await has_player_item(player.id, server_id, "Calculator"):
             advantage_factor = 3
             tool = "Calculator"
+            print("    using calculator")
         
         if amount > 10 * advantage_factor:
             await interaction.followup.send(
@@ -1835,26 +1836,10 @@ async def gift(interaction: discord.Interaction, user: discord.Member, value: fl
     now = datetime.utcnow()
 
     # Sender prüfen
-    sender = await get_player(sender_id, server_id)
+    sender = get_default_player(sender_id, server_id)
 
     if not sender:
-        sender = Player(
-            id=sender_id,
-            server_id=server_id,
-            money=100.0,
-            debt=0.0,
-            hunger=100,
-            thirst=100,
-            health=100,
-            job="",
-            created_at=datetime.utcnow(),
-            company_entrepreneur_id=None,
-            taxes_owed=0,
-            work_cooldown_until=None,
-            job_switch_cooldown_until=None,
-            company_creation_cooldown_until=None,
-            gift_cooldown_until=None
-        )
+        sender = await get_player(receiver_id, server_id)
         await add_object(sender, "Players")
 
     if sender.gift_cooldown_until and sender.gift_cooldown_until > now:
@@ -1883,17 +1868,7 @@ async def gift(interaction: discord.Interaction, user: discord.Member, value: fl
     receiver = await get_player(receiver_id, server_id)
 
     if not receiver:
-        receiver = Player(
-            id=receiver_id,
-            server_id=server_id,
-            money=100.0,
-            debt=0.0,
-            hunger=100,
-            thirst=100,
-            health=100,
-            job="",
-            created_at=datetime.utcnow()
-        )
+        receiver = get_default_player(receiver_id, server_id)
         await add_object(receiver, "Players")
 
     # Transaktion durchführen
